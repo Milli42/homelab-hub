@@ -713,6 +713,7 @@
             </a>
             <nav class="flex gap-1 items-center tab-nav">
                 <a href="/" class="nav-link {% if active_tab == 'dashboard' %}active{% endif %}">Dashboard</a>
+                <a href="/bookmarks" class="nav-link {% if active_tab == 'bookmarks' %}active{% endif %}">Bookmarks</a>
                 <a href="/tasks" class="nav-link {% if active_tab == 'tasks' %}active{% endif %}">Tasks</a>
                 <a href="/notes" class="nav-link {% if active_tab == 'notes' %}active{% endif %}">Notes</a>
                 <a href="/dogvax" class="nav-link {% if active_tab == 'dogvax' %}active{% endif %}">Dog Vax</a>
@@ -736,6 +737,9 @@
     <nav class="bottom-nav sm:hidden">
         <a href="/" class="bnav-item {% if active_tab == 'dashboard' %}active{% endif %}">
             <span class="bnav-ico">🏠</span> Home
+        </a>
+        <a href="/bookmarks" class="bnav-item {% if active_tab == 'bookmarks' %}active{% endif %}">
+            <span class="bnav-ico">🔖</span> Links
         </a>
         <a href="/tasks" class="bnav-item {% if active_tab == 'tasks' %}active{% endif %}">
             <span class="bnav-ico">✅</span> Tasks

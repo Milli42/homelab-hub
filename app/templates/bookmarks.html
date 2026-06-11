@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Bookmarks · Homelab Hub{% endblock %}
+{% set active_tab = 'bookmarks' %}
+
+{% block content %}
+<style>
+    /* Full-bleed iframe tab: cancel main's max-width/padding */
+    main:has(#homepage-frame) { max-width: none; padding: 0 !important; }
+    #homepage-frame {
+        display: block;
+        width: 100%;
+        border: none;
+        background: #0b0d12;
+        /* viewport minus sticky header */
+        height: calc(100vh - 57px);
+    }
+    @media (max-width: 639px) {
+        #homepage-frame {
+            height: calc(100vh - 49px - var(--nav-h) - env(safe-area-inset-bottom));
+        }
+        main:has(#homepage-frame) { padding-bottom: 0 !important; }
+    }
+</style>
+<iframe id="homepage-frame" src="http://192.168.20.79:3000" title="Homepage Dashboard"
+        loading="eager" referrerpolicy="no-referrer"></iframe>
+{% endblock %}

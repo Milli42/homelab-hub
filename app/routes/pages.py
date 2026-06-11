@@ -152,6 +152,14 @@ async def dashboard(request: Request, month: str | None = Query(None),
     ))
 
 
+# ── Bookmarks tab (embedded Homepage dashboard) ───────────
+
+@router.get("/bookmarks", response_class=HTMLResponse)
+async def bookmarks_page(request: Request):
+    return HTMLResponse(request.app.state.templates.get_template("bookmarks.html").render(
+        request=request))
+
+
 # ── Tasks tab ─────────────────────────────────────────────
 
 @router.get("/tasks", response_class=HTMLResponse)
