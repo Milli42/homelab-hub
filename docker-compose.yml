@@ -1,6 +1,6 @@
 services:
   homelab-hub:
-    image: ghcr.io/milli42/homelab-hub:1.0.1
+    image: ghcr.io/milli42/homelab-hub:1.1.0
     container_name: homelab-hub
     restart: unless-stopped
     ports:
@@ -8,8 +8,5 @@ services:
     volumes:
       - /mnt/user/appdata/homelab-hub:/data
       - /mnt/user/backups/animalvaccines:/user/backups/animalvaccines
-      # read-only mounts of the legacy apps for one-time migration
-      - /mnt/user/appdata/home-maintenance:/old/maintenance:ro
-      - /mnt/user/appdata/dog-vax-tracker:/old/dogvax:ro
     environment:
       - TZ=America/Chicago
