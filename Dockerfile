@@ -17,6 +17,7 @@ WORKDIR /app
 
 COPY --from=builder /build/.venv /app/.venv
 COPY --from=builder /build/app /app/app
+COPY scripts/ /app/scripts/
 
 RUN mkdir -p /data/images /data/notes/thumbs /data/uploads
 
