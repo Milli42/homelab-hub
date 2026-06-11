@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}{{ task.title }} — Homelab Hub{% endblock %}
+
+{% set active_tab = 'tasks' %}
+{% block content %}
+<div class="mb-4">
+    <a href="/tasks" class="text-sm text-overlay0 hover:text-text transition-colors">← Back to Tasks</a>
+</div>
+
+<div class="card p-6 mb-6 animate-in {% if task.is_overdue %}accent-red{% elif task.days_until_due == 0 %}accent-yellow{% endif %}" style="--i:0">
+    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+        <div>
+            <h1 class="text-2xl font-bold mb-2">{{ task.title }}</h1>
+            {% if task.category %}
+            <span class="glass-badge text-sm px-3 py-1" style="color: {{ task.category.color }}; border-color: {{ task.category.color }}30;">
+                {{ task.category.icon }} {{ task.category.name }}
+            </span>
+            {% endif %}
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+            <form action="/api/tasks/{{ task.id }}/snooze" method="POST"
+                  hx-post="/api/tasks/{{ task.id }}/snooze"
+                  hx-target="body" hx-swap="outerHTML"
+                  class="flex items-center gap-1.5">
+                <input type="number" name="days" value="7" min="1" max="365"
+                       class="input w-16 text-center text-sm py-1.5" title="Days to snooze">
+                <button type="submit" class="btn btn-ghost btn-sm">💤 Snooze</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="flex items-center gap-4 mb-4 text-sm">
+        <div class="flex items-center gap-1.5">
+            <span class="text-overlay0">Due:</span>
+            <span class="font-mono font-semibold
+                {% if task.is_overdue %}text-red
+                {% elif task.days_until_due == 0 %}text-yellow
+                {% elif task.days_until_due <= 3 %}text-peach
+                {% else %}text-text{% endif %}">
+                {{ task.due_date | datefmt }}
+                ({% if task.days_until_due < 0 %}{{ -task.days_until_due }}d overdue
+                 {% elif task.days_until_due == 0 %}today
+                 {% elif task.days_until_due == 1 %}tomorrow
+                 {% else %}{{ task.days_until_due }}d away{% endif %})
+            </span>
+        </div>
+        {% if task.is_recurring %}
+        <div class="flex items-center gap-1.5">
+            <span class="text-overlay0">Repeats:</span>
+            <span class="font-mono text-blue">{{ task.recurrence_label }}</span>
+        </div>
+        {% else %}
+        <span class="glass-badge text-overlay0">One-time</span>
+        {% endif %}
+    </div>
+
+    {% if task.description %}
+    <p class="text-subtext0 mb-4 leading-relaxed">{{ task.description }}</p>
+    {% endif %}
+
+    <div class="flex gap-2 flex-wrap">
+        {% if task.is_active %}
+        <form action="/api/tasks/{{ task.id }}/complete" method="POST" class="inline"
+              data-flash="✅ {{ task.title }} completed"
+              hx-post="/api/tasks/{{ task.id }}/complete" hx-target="body" hx-swap="outerHTML transition:true">
+            <button type="submit" class="btn btn-success">✅ Complete</button>
+        </form>
+        <form action="/api/tasks/{{ task.id }}/skip" method="POST" class="inline"
+              data-flash="⏭️ {{ task.title }} skipped"
+              hx-post="/api/tasks/{{ task.id }}/skip" hx-target="body" hx-swap="outerHTML transition:true">
+            <button type="submit" class="btn btn-ghost">⏭️ Skip</button>
+        </form>
+        <button onclick="document.getElementById('edit-form').classList.toggle('hidden')" class="btn btn-ghost">✏️ Edit</button>
+        {% else %}
+        <form action="/api/tasks/{{ task.id }}/restore" method="POST" class="inline"
+              data-flash="🔄 {{ task.title }} restored"
+              hx-post="/api/tasks/{{ task.id }}/restore" hx-target="body" hx-swap="outerHTML transition:true">
+            <input type="hidden" name="due_date" value="{{ task.due_date }}">
+            <button type="submit" class="btn btn-success">🔄 Restore</button>
+        </form>
+        {% endif %}
+        <form action="/api/tasks/{{ task.id }}" method="POST" class="inline"
+              data-flash="🗑️ {{ task.title }} deleted"
+              hx-delete="/api/tasks/{{ task.id }}" hx-target="body" hx-swap="outerHTML transition:true"
+              onsubmit="return confirm('Delete this task? History will be preserved.')">
+            <input type="hidden" name="_method" value="DELETE">
+            <button type="submit" class="btn btn-danger">🗑️ Delete</button>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Form -->
+<div id="edit-form" class="card p-6 mb-6 hidden">
+    <h2 class="text-lg font-bold mb-5">Edit Task</h2>
+    <form action="/api/tasks/{{ task.id }}" method="POST" class="space-y-4">
+        <input type="hidden" name="_method" value="PUT">
+        <div>
+            <label class="block text-sm text-subtext0 mb-1.5 font-medium">Title</label>
+            <input type="text" name="title" value="{{ task.title }}" class="input" required>
+        </div>
+        <div>
+            <label class="block text-sm text-subtext0 mb-1.5 font-medium">Description</label>
+            <textarea name="description" class="input" rows="2">{{ task.description or '' }}</textarea>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm text-subtext0 mb-1.5 font-medium">Category</label>
+                <select name="category_id" class="input">
+                    <option value="">None</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}" {% if task.category_id == cat.id %}selected{% endif %}>{{ cat.icon }} {{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm text-subtext0 mb-1.5 font-medium">Due Date</label>
+                <input type="date" name="due_date" value="{{ task.due_date }}" class="input" required>
+            </div>
+        </div>
+        <div>
+            <label class="block text-sm text-subtext0 mb-1.5 font-medium">Recurrence</label>
+            <div class="flex gap-2">
+                <input type="number" name="recurrence_interval" value="{{ task.recurrence_interval or '' }}" class="input w-24" min="1">
+                <select name="recurrence_unit" class="input w-auto">
+                    <option value="">One-time</option>
+                    <option value="day" {% if task.recurrence_unit == 'day' %}selected{% endif %}>Day(s)</option>
+                    <option value="week" {% if task.recurrence_unit == 'week' %}selected{% endif %}>Week(s)</option>
+                    <option value="month" {% if task.recurrence_unit == 'month' %}selected{% endif %}>Month(s)</option>
+                    <option value="year" {% if task.recurrence_unit == 'year' %}selected{% endif %}>Year(s)</option>
+                </select>
+            </div>
+        </div>
+        <div class="flex gap-2 pt-2">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <button type="button" onclick="document.getElementById('edit-form').classList.add('hidden')" class="btn btn-ghost">Cancel</button>
+        </div>
+    </form>
+</div>
+
+<!-- Photos -->
+<div class="card p-6 mb-6 animate-in" style="--i:1">
+    <h2 class="text-lg font-bold mb-4">📸 Photos</h2>
+    {% if task.photos %}
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        {% for photo in task.photos %}
+        <div class="relative group rounded-lg overflow-hidden">
+            <img src="/api/tasks/{{ task.id }}/images/{{ photo.id }}"
+                 alt="{{ photo.original_name }}"
+                 class="w-full h-32 object-cover">
+            <form action="/api/tasks/{{ task.id }}/images/{{ photo.id }}" method="POST" class="inline"
+                  hx-delete="/api/tasks/{{ task.id }}/images/{{ photo.id }}" hx-target="body" hx-swap="outerHTML">
+                <input type="hidden" name="_method" value="DELETE">
+                <button type="submit" class="absolute top-1.5 right-1.5 btn btn-danger btn-xs opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <form action="/api/tasks/{{ task.id }}/images" method="POST" enctype="multipart/form-data"
+          hx-post="/api/tasks/{{ task.id }}/images" hx-encoding="multipart/form-data"
+          hx-target="body" hx-swap="outerHTML" class="flex items-center gap-2">
+        <input type="file" name="file" accept="image/*" class="text-sm text-subtext0 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-white/5 file:text-subtext0 hover:file:bg-white/10">
+        <button type="submit" class="btn btn-ghost btn-sm">Upload</button>
+    </form>
+</div>
+
+<!-- History -->
+<div class="card p-6 animate-in" style="--i:2">
+    <h2 class="text-lg font-bold mb-4">📜 History</h2>
+    {% if task.history %}
+    <div class="space-y-2">
+        {% for entry in task.history %}
+        <div class="flex items-center gap-3 text-sm py-2 border-b border-white/5 last:border-0">
+            <span class="font-mono text-overlay0 w-24 flex-shrink-0">{{ entry.event_date | datefmt }}</span>
+            <span class="{% if entry.event_type == 'completed' %}text-green{% else %}text-yellow{% endif %} font-medium">
+                {% if entry.event_type == 'completed' %}✅ Completed{% else %}⏭️ Skipped{% endif %}
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-subtext0 text-sm">No history yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

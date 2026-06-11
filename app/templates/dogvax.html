@@ -1,0 +1,350 @@
+{% extends "base.html" %}
+{% block title %}Dog Vax — Homelab Hub{% endblock %}
+{% set active_tab = 'dogvax' %}
+
+{% block mobile_add %}<button class="bnav-item bnav-add" onclick="showModal('add-vax-modal')" aria-label="Add Vaccine"><span class="add-circle">+</span></button>{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between gap-4 mb-5 animate-in" style="--i:0">
+    <h1 class="text-2xl sm:text-3xl font-extrabold text-text">Dog Vax</h1>
+    <div class="flex items-center gap-2">
+        <button class="btn btn-primary btn-sm hidden sm:inline-flex" onclick="showModal('add-vax-modal')" {% if not selected %}disabled{% endif %}>+ Vaccine</button>
+        <button class="gear-btn" onclick="const s=document.getElementById('vax-settings'); s.setAttribute('open',''); s.scrollIntoView({behavior:'smooth'})" title="Dog Vax settings" aria-label="Dog Vax settings">⚙️</button>
+    </div>
+</div>
+
+<!-- ═══ Pet chips ═══ -->
+<div class="flex gap-2 overflow-x-auto pb-2 mb-5 animate-in" style="--i:1; scrollbar-width: none;">
+    {% for p in pets %}
+    <a href="/dogvax?pet={{ p.id }}" class="chip {% if selected and p.id == selected.id %}chip-active{% endif %}" style="{% if selected and p.id == selected.id %}background:#fb923c;border-color:#fb923c;{% endif %}">
+        🐶 {{ p.name }}
+    </a>
+    {% endfor %}
+    <button class="chip" onclick="showModal('add-pet-modal')">+ Add pet</button>
+</div>
+
+{% if selected %}
+<!-- ═══ Pet hero card ═══ -->
+{% set hero_overdue = current_vaccines | selectattr('is_overdue') | list %}
+<div class="card p-5 mb-6 animate-in" style="--i:2">
+    <div class="flex items-center gap-4">
+        <div class="relative flex-shrink-0">
+            {% if selected.avatar_path %}
+            <img src="/api/pets/{{ selected.id }}/avatar" class="pet-avatar w-20 h-20 sm:w-24 sm:h-24" alt="{{ selected.name }}">
+            {% else %}
+            <div class="pet-avatar w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center text-3xl">🐶</div>
+            {% endif %}
+            <form action="/api/pets/{{ selected.id }}/avatar" method="POST" enctype="multipart/form-data" id="avatar-form">
+                <label class="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-peach text-[#07090d] flex items-center justify-center text-xs cursor-pointer border-2 border-[#141823]" title="Change photo">
+                    📷<input type="file" name="file" accept="image/*" class="hidden" onchange="document.getElementById('avatar-form').submit()">
+                </label>
+            </form>
+        </div>
+        <div class="min-w-0 flex-1">
+            <h2 class="text-2xl font-extrabold">{{ selected.name }}</h2>
+            <div class="text-sm text-subtext0">{{ selected.breed or selected.species | title }}</div>
+            <div class="flex flex-wrap gap-1.5 mt-2">
+                {% if selected.age_label %}<span class="glass-badge text-subtext0">🎂 {{ selected.age_label }}</span>{% endif %}
+                {% if weights %}<span class="glass-badge text-subtext0">⚖️ {{ weights[0].weight }} lb</span>{% endif %}
+                <button class="glass-badge text-subtext0 hover:text-text cursor-pointer transition-colors" onclick="showModal('edit-pet-modal')">✏️ Edit</button>
+            </div>
+        </div>
+    </div>
+    <div class="flex items-center justify-between gap-3 mt-4 pt-3.5 border-t border-[#232838]">
+        {% if hero_overdue %}
+        <span class="font-bold text-sm text-red">⚠️ {{ hero_overdue|length }} vaccine{{ 's' if hero_overdue|length != 1 }} overdue</span>
+        {% elif current_vaccines %}
+        {% set nxt = current_vaccines[0] %}
+        <span class="font-bold text-sm text-green">✓ Up to date</span>
+        <span class="text-xs text-subtext0">Next: {{ nxt.vaccine_name }} in {{ nxt.days_until_due }}d</span>
+        {% else %}
+        <span class="text-sm text-overlay0">No vaccines recorded yet</span>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ═══ Current vaccines ═══ -->
+<section class="mb-7">
+    <h2 class="section-title">💉 Current Vaccines <span class="count-badge">{{ current_vaccines|length }}</span></h2>
+    <div class="grid gap-2.5 lg:grid-cols-2">
+        {% for v in current_vaccines %}
+        {% set d = v.days_until_due %}
+        <div class="card p-3.5 animate-in {% if d < 0 %}vax-overdue{% elif d <= 30 %}vax-soon{% elif d <= 60 %}vax-coming{% endif %}" style="--i:{{ loop.index0 }}">
+            <div class="flex items-start justify-between gap-2 mb-1.5">
+                <div class="font-extrabold leading-snug" style="overflow-wrap: anywhere;">{{ v.vaccine_name }}</div>
+                <span class="glass-badge flex-shrink-0 {% if d < 0 %}!text-red{% elif d <= 30 %}!text-yellow{% else %}!text-green{% endif %}">
+                    {% if d < 0 %}Overdue{% elif d <= 30 %}Due soon{% else %}Current{% endif %}
+                </span>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+                <div class="text-xs text-subtext0">
+                    <span class="font-bold {% if d < 0 %}text-red{% elif d <= 30 %}text-yellow{% else %}text-blue{% endif %}">
+                        {% if d < 0 %}{{ -d }}d overdue{% else %}Due in {{ d }}d{% endif %}
+                    </span>
+                    · given {{ v.administered_date | datefmt('%b %-d, %Y') }} · due {{ v.due_date | datefmt('%b %-d, %Y') }}
+                </div>
+                <div class="flex gap-1 flex-shrink-0">
+                    {% if v.file_path %}
+                    <a href="/api/vaccines/{{ v.id }}/file" target="_blank" class="btn btn-ghost btn-xs">📄 Record</a>
+                    {% endif %}
+                    <button class="btn btn-ghost btn-xs" popovertarget="vax-menu-{{ v.id }}" aria-label="More">⋯</button>
+                    <div id="vax-menu-{{ v.id }}" popover class="pop-menu min-w-44">
+                        <form action="/api/vaccines/{{ v.id }}/attach" method="POST" enctype="multipart/form-data" id="attach-{{ v.id }}">
+                            <label class="pop-item cursor-pointer block">📎 {{ 'Replace' if v.file_path else 'Attach' }} file
+                                <input type="file" name="file" accept=".pdf,image/*" class="hidden" onchange="document.getElementById('attach-{{ v.id }}').submit()">
+                            </label>
+                        </form>
+                        <form action="/api/vaccines/{{ v.id }}/delete" method="POST" onsubmit="return confirm('Delete {{ v.vaccine_name }}?')">
+                            <button type="submit" class="pop-item !text-red">🗑 Delete</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% if v.notes %}<div class="text-xs text-overlay0 mt-1.5">{{ v.notes }}</div>{% endif %}
+        </div>
+        {% else %}
+        <div class="card p-5 text-center text-sm text-overlay0 lg:col-span-2">No vaccines yet — add the first one.</div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- ═══ History: Weight + Vaccine log ═══ -->
+<div class="grid lg:grid-cols-2 gap-5 mb-7">
+    <section class="card p-4 animate-in">
+        <div class="flex items-center justify-between mb-3">
+            <h2 class="section-title !mb-0">⚖️ Weight</h2>
+            <button class="btn btn-ghost btn-xs" onclick="showModal('add-weight-modal')">+ Log</button>
+        </div>
+        {% if weights_chart|length >= 2 %}
+        <div id="weight-chart" class="mb-3"></div>
+        {% endif %}
+        <div class="space-y-1 max-h-56 overflow-y-auto">
+            {% for w in weights %}
+            <div class="flex items-center gap-2 text-sm py-1 px-1.5 rounded-lg hover:bg-[#181d2a] group">
+                <span class="font-bold w-16">{{ w.weight }} lb</span>
+                <span class="text-xs text-overlay0 flex-1">{{ w.date | datefmt('%b %-d, %Y') }}{% if w.notes %} · {{ w.notes }}{% endif %}</span>
+                <form action="/api/weights/{{ w.id }}/delete" method="POST" class="opacity-0 group-hover:opacity-100 transition-opacity" onsubmit="return confirm('Delete this entry?')">
+                    <button type="submit" class="text-red text-xs px-1.5" aria-label="Delete">×</button>
+                </form>
+            </div>
+            {% else %}
+            <div class="text-sm text-overlay0 text-center py-3">No weight entries.</div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="card p-4 animate-in">
+        <div class="flex items-center justify-between mb-3">
+            <h2 class="section-title !mb-0">📜 Vaccine Log</h2>
+            <label class="flex items-center gap-1.5 text-xs text-overlay0 cursor-pointer">
+                <input type="checkbox" id="show-archived-toggle" class="accent-[#fb923c]" onchange="document.querySelectorAll('.vax-archived-row').forEach(r => r.classList.toggle('hidden', !this.checked))">
+                Show archived
+            </label>
+        </div>
+        <div class="space-y-1 max-h-72 overflow-y-auto">
+            {% for v in current_vaccines %}
+            <div class="flex items-center gap-2 text-sm py-1.5 px-1.5 rounded-lg hover:bg-[#181d2a]">
+                <span class="glass-badge !text-green flex-shrink-0">Current</span>
+                <span class="flex-1 truncate">{{ v.vaccine_name }}</span>
+                <span class="text-xs text-overlay0 flex-shrink-0">{{ v.administered_date | datefmt('%b %Y') }}</span>
+            </div>
+            {% endfor %}
+            {% for v in archived_vaccines %}
+            <div class="vax-archived-row hidden flex items-center gap-2 text-sm py-1.5 px-1.5 rounded-lg opacity-55">
+                <span class="glass-badge flex-shrink-0">Archived</span>
+                <span class="flex-1 truncate">{{ v.vaccine_name }}</span>
+                <span class="text-xs text-overlay0 flex-shrink-0">{{ v.administered_date | datefmt('%b %Y') }}</span>
+                {% if v.file_path %}<a href="/api/vaccines/{{ v.id }}/file" target="_blank" class="text-xs text-blue flex-shrink-0">📄</a>{% endif %}
+            </div>
+            {% endfor %}
+            {% if not current_vaccines and not archived_vaccines %}
+            <div class="text-sm text-overlay0 text-center py-3">No history.</div>
+            {% endif %}
+        </div>
+    </section>
+</div>
+
+{% else %}
+<div class="text-center py-16 animate-in">
+    <div class="text-6xl mb-5 opacity-25">🐾</div>
+    <h2 class="text-xl font-bold text-subtext0 mb-2">No pets yet</h2>
+    <button class="btn btn-primary text-base px-6 py-3 mt-2" onclick="showModal('add-pet-modal')">✨ Add Your First Pet</button>
+</div>
+{% endif %}
+
+<!-- ═══ IN-PAGE SETTINGS (backups) ═══ -->
+<details class="settings-panel mt-8 scroll-mt-20" id="vax-settings">
+    <summary class="section-title !mb-0 py-2"><span class="chev">▶</span> ⚙️ Dog Vax Settings</summary>
+    <div class="settings-body mt-3 max-w-lg space-y-4">
+        <div class="card p-5">
+            <h3 class="font-bold mb-3">💾 Backup & Restore</h3>
+            <div class="flex flex-wrap gap-2 mb-4">
+                <a href="/api/backup" class="btn btn-ghost btn-sm">⬇️ Download backup</a>
+                <form action="/api/backup/restore" method="POST" enctype="multipart/form-data" id="restore-form" class="inline">
+                    <label class="btn btn-ghost btn-sm cursor-pointer">⬆️ Restore from zip
+                        <input type="file" name="file" accept=".zip" class="hidden" onchange="if (confirm('Restoring replaces ALL data. Continue?')) document.getElementById('restore-form').submit(); else this.value='';">
+                    </label>
+                </form>
+            </div>
+            <form action="/api/backup/settings" method="POST" class="space-y-3 pt-3 border-t border-[#232838]" data-flash="Backup settings saved">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium">Auto-backup</span>
+                    <label class="switch">
+                        <input type="checkbox" name="enabled" value="true" id="ab-enabled">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div>
+                    <label class="field-label">Frequency</label>
+                    <select name="frequency" class="input" id="ab-frequency">
+                        <option value="12h">Every 12 hours</option>
+                        <option value="1d">Daily</option>
+                        <option value="7d">Weekly</option>
+                        <option value="30d">Monthly</option>
+                    </select>
+                </div>
+                <div class="text-xs text-overlay0" id="ab-last"></div>
+                <button type="submit" class="btn btn-primary btn-sm">Save</button>
+            </form>
+        </div>
+        {% if selected %}
+        <div class="card p-5">
+            <h3 class="font-bold mb-2 text-red">Danger zone</h3>
+            <form action="/api/pets/{{ selected.id }}" method="POST" onsubmit="return confirm('Delete {{ selected.name }} and ALL records? This cannot be undone.')">
+                <input type="hidden" name="_method" value="DELETE">
+                <button type="submit" class="btn btn-danger btn-sm">Delete {{ selected.name }}</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+</details>
+
+<!-- ═══ Modals ═══ -->
+<div id="add-pet-modal" class="modal-overlay hidden" onclick="if (event.target === this) this.classList.add('hidden')">
+    <div class="modal-panel">
+        <h3 class="text-lg font-bold mb-5">Add Pet</h3>
+        <form action="/api/pets" method="POST" class="space-y-4">
+            <div><label class="field-label">Name</label><input type="text" name="name" class="input" required></div>
+            <div class="grid grid-cols-2 gap-3">
+                <div><label class="field-label">Species</label><input type="text" name="species" class="input" value="dog"></div>
+                <div><label class="field-label">Breed</label><input type="text" name="breed" class="input"></div>
+            </div>
+            <div><label class="field-label">Birth date</label><input type="date" name="birth_date" class="input"></div>
+            <div class="flex gap-2 pt-1">
+                <button type="submit" class="btn btn-primary flex-1">Add Pet</button>
+                <button type="button" class="btn btn-ghost" onclick="hideModal('add-pet-modal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if selected %}
+<div id="edit-pet-modal" class="modal-overlay hidden" onclick="if (event.target === this) this.classList.add('hidden')">
+    <div class="modal-panel">
+        <h3 class="text-lg font-bold mb-5">Edit {{ selected.name }}</h3>
+        <form action="/api/pets/{{ selected.id }}" method="POST" class="space-y-4">
+            <input type="hidden" name="_method" value="PUT">
+            <div><label class="field-label">Name</label><input type="text" name="name" value="{{ selected.name }}" class="input" required></div>
+            <div class="grid grid-cols-2 gap-3">
+                <div><label class="field-label">Species</label><input type="text" name="species" value="{{ selected.species }}" class="input"></div>
+                <div><label class="field-label">Breed</label><input type="text" name="breed" value="{{ selected.breed or '' }}" class="input"></div>
+            </div>
+            <div><label class="field-label">Birth date</label><input type="date" name="birth_date" value="{{ selected.birth_date or '' }}" class="input"></div>
+            <div class="flex gap-2 pt-1">
+                <button type="submit" class="btn btn-primary flex-1">Save</button>
+                <button type="button" class="btn btn-ghost" onclick="hideModal('edit-pet-modal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="add-vax-modal" class="modal-overlay hidden" onclick="if (event.target === this) this.classList.add('hidden')">
+    <div class="modal-panel">
+        <h3 class="text-lg font-bold mb-5">Add Vaccine for {{ selected.name }}</h3>
+        <form action="/api/vaccines" method="POST" enctype="multipart/form-data" class="space-y-4">
+            <input type="hidden" name="pet_id" value="{{ selected.id }}">
+            <div><label class="field-label">Vaccine name</label><input type="text" name="vaccine_name" class="input" list="vax-names" required></div>
+            <datalist id="vax-names">
+                <option value="Rabies"><option value="DHPP"><option value="Bordetella">
+                <option value="Leptospirosis"><option value="Canine Influenza"><option value="Lyme">
+            </datalist>
+            <div class="grid grid-cols-2 gap-3">
+                <div><label class="field-label">Administered</label><input type="date" name="administered_date" class="input" required></div>
+                <div><label class="field-label">Due next</label><input type="date" name="due_date" class="input" required></div>
+            </div>
+            <div><label class="field-label">Notes</label><input type="text" name="notes" class="input"></div>
+            <div><label class="field-label">Record file (PDF/image)</label><input type="file" name="file" accept=".pdf,image/*" class="input !py-2"></div>
+            <div class="flex gap-2 pt-1">
+                <button type="submit" class="btn btn-primary flex-1">Add Vaccine</button>
+                <button type="button" class="btn btn-ghost" onclick="hideModal('add-vax-modal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="add-weight-modal" class="modal-overlay hidden" onclick="if (event.target === this) this.classList.add('hidden')">
+    <div class="modal-panel">
+        <h3 class="text-lg font-bold mb-5">Log Weight — {{ selected.name }}</h3>
+        <form action="/api/pets/{{ selected.id }}/weights" method="POST" class="space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+                <div><label class="field-label">Weight (lb)</label><input type="number" step="0.1" name="weight" class="input" required></div>
+                <div><label class="field-label">Date</label><input type="date" name="date" class="input" value="{{ today.isoformat() }}" required></div>
+            </div>
+            <div><label class="field-label">Notes</label><input type="text" name="notes" class="input"></div>
+            <div class="flex gap-2 pt-1">
+                <button type="submit" class="btn btn-primary flex-1">Save</button>
+                <button type="button" class="btn btn-ghost" onclick="hideModal('add-weight-modal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<script>
+function showModal(id) { const m = document.getElementById(id); if (m) m.classList.remove('hidden'); }
+function hideModal(id) { const m = document.getElementById(id); if (m) m.classList.add('hidden'); }
+
+// ── Backup settings hydrate ──
+fetch('/api/backup/settings').then(r => r.json()).then(s => {
+    const en = document.getElementById('ab-enabled');
+    const fr = document.getElementById('ab-frequency');
+    const la = document.getElementById('ab-last');
+    if (en) en.checked = s.enabled;
+    if (fr) fr.value = s.frequency;
+    if (la && s.last_backup) la.textContent = 'Last backup: ' + s.last_backup.replace('T', ' ').slice(0, 16) + ' UTC';
+}).catch(() => {});
+
+// ── Weight chart (dependency-free inline SVG) ──
+{% if weights_chart|length >= 2 %}
+(function () {
+    const data = {{ weights_chart | tojson }};
+    const el = document.getElementById('weight-chart');
+    if (!el || data.length < 2) return;
+    const W = 560, H = 150, P = 26;
+    const ws = data.map(d => d.weight);
+    const min = Math.min(...ws), max = Math.max(...ws);
+    const span = (max - min) || 1;
+    const x = i => P + i * (W - 2 * P) / (data.length - 1);
+    const y = w => H - P - (w - min) / span * (H - 2 * P);
+    const pts = data.map((d, i) => `${x(i)},${y(d.weight)}`).join(' ');
+    const area = `${P},${H - P} ${pts} ${W - P},${H - P}`;
+    const grid = [0.25, 0.5, 0.75].map(f => {
+        const gy = H - P - f * (H - 2 * P);
+        return `<line x1="${P}" y1="${gy}" x2="${W - P}" y2="${gy}" stroke="#232838" stroke-width="1"/>`;
+    }).join('');
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" class="w-full h-auto">
+        <defs><linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#fb923c" stop-opacity="0.28"/>
+            <stop offset="1" stop-color="#fb923c" stop-opacity="0"/>
+        </linearGradient></defs>
+        ${grid}
+        <polygon points="${area}" fill="url(#wg)"/>
+        <polyline points="${pts}" fill="none" stroke="#fb923c" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+        ${data.map((d, i) => `<circle cx="${x(i)}" cy="${y(d.weight)}" r="3.5" fill="#fb923c" stroke="#141823" stroke-width="2"><title>${d.weight} lb — ${d.date}</title></circle>`).join('')}
+        <text x="${P}" y="${H - 6}" fill="#76819a" font-size="10" font-weight="700">${data[0].date}</text>
+        <text x="${W - P}" y="${H - 6}" fill="#76819a" font-size="10" font-weight="700" text-anchor="end">${data[data.length - 1].date}</text>
+    </svg>`;
+})();
+{% endif %}
+</script>
+{% endblock %}

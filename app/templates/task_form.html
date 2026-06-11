@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}New Task — Homelab Hub{% endblock %}
+
+{% set active_tab = 'tasks' %}
+{% block content %}
+<div class="mb-4">
+    <a href="/tasks" class="text-sm text-overlay0 hover:text-text transition-colors">← Back to Tasks</a>
+</div>
+
+<div class="card p-8 max-w-lg mx-auto animate-in">
+    <h1 class="text-2xl font-extrabold mb-8 text-text">Create New Task</h1>
+
+    <form action="/api/tasks" method="POST" class="space-y-5">
+        <div>
+            <label class="block text-sm text-subtext0 mb-1.5 font-medium">Title *</label>
+            <input type="text" name="title" class="input" placeholder="e.g. Change furnace filter" required autofocus>
+        </div>
+        <div>
+            <label class="block text-sm text-subtext0 mb-1.5 font-medium">Description</label>
+            <textarea name="description" class="input" rows="2" placeholder="Optional details..."></textarea>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm text-subtext0 mb-1.5 font-medium">Category</label>
+                <select name="category_id" class="input">
+                    <option value="">Select...</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}">{{ cat.icon }} {{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm text-subtext0 mb-1.5 font-medium">Due Date *</label>
+                <input type="date" name="due_date" class="input" required>
+            </div>
+        </div>
+        <div>
+            <label class="block text-sm text-subtext0 mb-1.5 font-medium">Recurrence</label>
+            <div class="flex gap-2">
+                <input type="number" name="recurrence_interval" class="input w-28" min="1" placeholder="e.g. 3">
+                <select name="recurrence_unit" class="input w-auto">
+                    <option value="" selected>One-time</option>
+                    <option value="day">Day(s)</option>
+                    <option value="week">Week(s)</option>
+                    <option value="month">Month(s)</option>
+                    <option value="year">Year(s)</option>
+                </select>
+            </div>
+            <p class="text-overlay0 text-xs mt-2">Leave interval empty for one-time. Photos can be added after creation.</p>
+        </div>
+        <div class="flex gap-3 pt-3">
+            <button type="submit" class="btn btn-primary flex-1 text-base py-3">Create Task</button>
+            <a href="/tasks" class="btn btn-ghost">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

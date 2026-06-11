@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}{{ note.title }} — Notes — Homelab Hub{% endblock %}
+{% set active_tab = 'notes' %}
+
+{% block content %}
+<div class="mb-4 animate-in" style="--i:0">
+    <a href="/notes/group/{{ note.group_id }}" class="text-sm text-overlay0 hover:text-text transition-colors">← {{ note.group.icon }} {{ note.group.name }}</a>
+</div>
+
+<div class="max-w-3xl mx-auto">
+    <div class="card p-5 sm:p-7 animate-in" style="--i:1">
+        {% if edit_mode %}
+        <!-- ═══ EDIT MODE ═══ -->
+        <form action="/api/notes/{{ note.id }}" method="POST" class="space-y-4">
+            <input type="hidden" name="_method" value="PUT">
+            <div>
+                <label class="field-label">Title</label>
+                <input type="text" name="title" value="{{ note.title }}" class="input text-lg font-bold" required>
+            </div>
+            <div>
+                <label class="field-label">Body <span class="normal-case font-normal text-overlay0">("- [ ] item" → checkbox · ## heading · **bold**)</span></label>
+                <textarea name="body" rows="16" class="input font-mono text-sm leading-relaxed">{{ note.body }}</textarea>
+            </div>
+            <div class="flex gap-2">
+                <button type="submit" class="btn btn-primary flex-1">Save</button>
+                <a href="/notes/{{ note.id }}" class="btn btn-ghost">Cancel</a>
+            </div>
+        </form>
+        {% else %}
+        <!-- ═══ VIEW MODE ═══ -->
+        <div class="flex items-start justify-between gap-3 mb-1">
+            <h1 class="text-xl sm:text-2xl font-extrabold leading-tight">{% if note.is_pinned %}📌 {% endif %}{{ note.title }}</h1>
+            <div class="flex gap-1.5 flex-shrink-0">
+                <a href="/notes/{{ note.id }}?edit=1" class="btn btn-ghost btn-sm">✏️ Edit</a>
+                <button class="btn btn-ghost btn-sm" popovertarget="note-menu" aria-label="More">⋯</button>
+                <div id="note-menu" popover class="pop-menu min-w-44">
+                    <form action="/api/notes/{{ note.id }}/pin" method="POST">
+                        <button type="submit" class="pop-item">{% if note.is_pinned %}Unpin{% else %}📌 Pin to top{% endif %}</button>
+                    </form>
+                    <form action="/api/notes/{{ note.id }}" method="POST" onsubmit="return confirm('Delete this note?')">
+                        <input type="hidden" name="_method" value="DELETE">
+                        <button type="submit" class="pop-item !text-red">🗑 Delete note</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="text-xs text-overlay0 mb-5">Updated {{ note.updated_at | reltime }}</div>
+
+        {% set cs = note.checkbox_stats %}
+        {% if cs[1] %}
+        <div class="flex items-center gap-3 mb-5">
+            <div class="progress-bar flex-1"><div id="note-progress" style="width: {{ (cs[0] / cs[1] * 100) | round }}%"></div></div>
+            <span class="text-xs font-bold text-overlay0" id="note-progress-label">{{ cs[0] }}/{{ cs[1] }} done</span>
+        </div>
+        {% endif %}
+
+        <div class="note-body text-[0.95rem] leading-relaxed" id="note-body">
+{{ rendered_body | safe }}
+        </div>
+
+        <!-- ═══ Photos ═══ -->
+        <div class="mt-7 pt-5 border-t border-[#232838]">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="section-title !mb-0">📷 Photos {% if note.images %}<span class="count-badge">{{ note.images|length }}</span>{% endif %}</h2>
+                <form action="/api/notes/{{ note.id }}/images" method="POST" enctype="multipart/form-data" id="photo-form">
+                    <label class="btn btn-ghost btn-sm cursor-pointer">
+                        + Add photo
+                        <input type="file" name="file" accept="image/*" class="hidden" onchange="document.getElementById('photo-form').submit()">
+                    </label>
+                </form>
+            </div>
+            {% if note.images %}
+            <div class="flex flex-wrap gap-2.5">
+                {% for img in note.images %}
+                <div class="relative group">
+                    <img src="/note-images/thumbs/{{ img.thumb_filename }}" class="thumb" alt="{{ img.original_name }}"
+                         onclick="openLightbox('/note-images/{{ img.filename }}')" loading="lazy">
+                    <form action="/api/notes/images/{{ img.id }}/delete" method="POST" class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onsubmit="return confirm('Delete this photo?')">
+                        <button type="submit" class="w-6 h-6 rounded-full bg-[#1e2330] border border-[#2f3750] text-red text-xs font-bold flex items-center justify-center hover:bg-red hover:text-[#07090d] transition-colors" aria-label="Delete photo">×</button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-sm text-overlay0">No photos yet.</div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if not edit_mode %}
+<script>
+// ── Interactive checkboxes: toggle persists to server ──
+document.querySelectorAll('#note-body input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', async () => {
+        const label = cb.closest('.note-check');
+        label.classList.toggle('done', cb.checked);
+        cb.disabled = true;
+        try {
+            const res = await fetch('/api/notes/{{ note.id }}/toggle-checkbox', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ index: parseInt(cb.dataset.cbIndex, 10) }),
+            });
+            if (!res.ok) throw new Error();
+            // update progress bar
+            const boxes = document.querySelectorAll('#note-body input[type=checkbox]');
+            const done = [...boxes].filter(b => b.checked).length;
+            const bar = document.getElementById('note-progress');
+            const lbl = document.getElementById('note-progress-label');
+            if (bar) bar.style.width = (done / boxes.length * 100) + '%';
+            if (lbl) lbl.textContent = done + '/' + boxes.length + ' done';
+        } catch {
+            cb.checked = !cb.checked;
+            label.classList.toggle('done', cb.checked);
+            showToast('Failed to save — try again');
+        } finally {
+            cb.disabled = false;
+        }
+    });
+});
+
+// ── Lightbox ──
+function openLightbox(src) {
+    const lb = document.createElement('div');
+    lb.className = 'lightbox';
+    lb.onclick = () => lb.remove();
+    lb.innerHTML = `<img src="${src}" alt="">`;
+    document.body.appendChild(lb);
+    document.addEventListener('keydown', function esc(e) {
+        if (e.key === 'Escape') { lb.remove(); document.removeEventListener('keydown', esc); }
+    });
+}
+</script>
+{% endif %}
+{% endblock %}

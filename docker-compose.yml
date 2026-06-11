@@ -1,0 +1,12 @@
+services:
+  homelab-hub:
+    image: ghcr.io/milli42/homelab-hub:1.0.0
+    container_name: homelab-hub
+    restart: unless-stopped
+    ports:
+      - "8052:8000"
+    volumes:
+      - /mnt/user/appdata/homelab-hub:/data
+      - /mnt/user/backups/animalvaccines:/user/backups/animalvaccines
+    environment:
+      - TZ=America/Chicago

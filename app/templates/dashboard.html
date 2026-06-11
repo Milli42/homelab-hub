@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Homelab Hub{% endblock %}
+{% set active_tab = 'dashboard' %}
+
+{% block content %}
+{% set attention_count = overdue_tasks|length + today_tasks|length + overdue_vax|length %}
+
+<!-- ═══ Greeting ═══ -->
+<div class="flex items-end justify-between gap-4 mb-5 animate-in" style="--i:0">
+    <div>
+        <div class="text-xs font-bold uppercase tracking-widest text-overlay0 mb-1">{{ today.strftime('%A, %B') }} {{ today.day }}</div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-text">
+            {% if attention_count %}{{ attention_count }} thing{{ 's' if attention_count != 1 }} need{{ 's' if attention_count == 1 }} your attention{% else %}All systems green 🎉{% endif %}
+        </h1>
+    </div>
+</div>
+
+<!-- ═══ Stat tiles ═══ -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-6">
+    <a href="/tasks" class="stat-tile animate-pop {% if overdue_tasks %}stat-hot{% endif %}" style="--i:0; --c:#ff6b8a">
+        <div class="stat-num text-red" data-count="{{ overdue_tasks|length }}">0</div>
+        <div class="stat-label">Tasks Overdue</div>
+    </a>
+    <a href="/tasks" class="stat-tile animate-pop {% if today_tasks %}stat-hot{% endif %}" style="--i:1; --c:#fbbf24">
+        <div class="stat-num text-yellow" data-count="{{ today_tasks|length + week_tasks|length }}">0</div>
+        <div class="stat-label">Tasks This Week</div>
+    </a>
+    <a href="/dogvax" class="stat-tile animate-pop {% if overdue_vax %}stat-hot{% endif %}" style="--i:2; --c:#fb923c">
+        <div class="stat-num text-peach" data-count="{{ overdue_vax|length + soon_vax|length }}">0</div>
+        <div class="stat-label">Vax Due ≤30d</div>
+    </a>
+    <a href="/notes" class="stat-tile animate-pop" style="--i:3; --c:#a78bfa">
+        <div class="stat-num text-mauve" data-count="{{ notes_count }}">0</div>
+        <div class="stat-label">Notes</div>
+    </a>
+</div>
+
+<!-- ═══ Needs Attention (cross-module feed) ═══ -->
+{% if attention_count %}
+<section class="mb-7">
+    <div class="section-hero">
+        <h2 class="section-title !text-red !mb-3">⚠️ Needs Attention
+            <span class="count-badge !text-red" style="border-color: rgba(255,107,138,0.3)">{{ attention_count }}</span>
+        </h2>
+        <div class="grid gap-2 lg:grid-cols-2">
+            {% for v in overdue_vax %}
+            <a href="/dogvax?pet={{ v.pet_id }}" class="card card-urgent p-3 flex items-center gap-3 animate-in" style="--i:{{ loop.index0 }}">
+                <div class="date-block db-red"><span class="db-mon">{{ v.due_date | datefmt('%b') }}</span><span class="db-day">{{ v.due_date | datefmt('%-d') }}</span></div>
+                <div class="min-w-0 flex-1">
+                    <div class="font-bold text-sm truncate">🐾 {{ v.pet.name }} — {{ v.vaccine_name }}</div>
+                    <div class="text-xs text-red font-bold">{{ (v.days_until_due | abs) }}d overdue</div>
+                </div>
+            </a>
+            {% endfor %}
+            {% for t in overdue_tasks %}
+            <a href="/tasks/{{ t.id }}" class="card card-urgent p-3 flex items-center gap-3 animate-in" style="--i:{{ loop.index0 + overdue_vax|length }}">
+                <div class="date-block db-red"><span class="db-mon">{{ t.due_date | datefmt('%b') }}</span><span class="db-day">{{ t.due_date | datefmt('%-d') }}</span></div>
+                <div class="min-w-0 flex-1">
+                    <div class="font-bold text-sm truncate">{{ t.category.icon if t.category else '📋' }} {{ t.title }}</div>
+                    <div class="text-xs text-red font-bold">{{ (t.days_until_due | abs) }}d overdue</div>
+                </div>
+            </a>
+            {% endfor %}
+            {% for t in today_tasks %}
+            <a href="/tasks/{{ t.id }}" class="card card-today p-3 flex items-center gap-3 animate-in" style="--i:{{ loop.index0 + overdue_vax|length + overdue_tasks|length }}">
+                <div class="date-block db-yellow"><span class="db-mon">{{ t.due_date | datefmt('%b') }}</span><span class="db-day">{{ t.due_date | datefmt('%-d') }}</span></div>
+                <div class="min-w-0 flex-1">
+                    <div class="font-bold text-sm truncate">{{ t.category.icon if t.category else '📋' }} {{ t.title }}</div>
+                    <div class="text-xs text-yellow font-bold">Due today</div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<div class="grid lg:grid-cols-5 gap-6 items-start">
+    <!-- ═══ Calendar (tasks + vax) ═══ -->
+    <section class="lg:col-span-3 card p-4 animate-in" style="--i:2">
+        <div class="flex items-center justify-between mb-3">
+            <h2 class="section-title !mb-0">📅 {{ month_label }}</h2>
+            <div class="flex gap-1">
+                <a href="/?month={{ prev_month }}" class="btn btn-ghost btn-xs" aria-label="Previous month">←</a>
+                <a href="/" class="btn btn-ghost btn-xs">Today</a>
+                <a href="/?month={{ next_month }}" class="btn btn-ghost btn-xs" aria-label="Next month">→</a>
+            </div>
+        </div>
+        <div class="cal-grid mb-1">
+            {% for dow in ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'] %}<div class="cal-dow">{{ dow }}</div>{% endfor %}
+        </div>
+        <div class="cal-grid">
+            {% for d in grid_days %}
+            {% set iso = d.isoformat() %}
+            {% set day = cal_by_day.get(iso) %}
+            <div class="cal-cell {% if d.month != first.month %}cal-other{% endif %} {% if iso == today_str %}cal-today{% endif %} {% if day %}has-tasks{% endif %}"
+                 {% if day %}onclick="showDay('{{ iso }}')" role="button" tabindex="0"{% endif %}>
+                <span class="cal-num">{{ d.day }}</span>
+                {% if day %}
+                <div class="cal-dots">
+                    {% for t in day.tasks[:3] %}<span class="cal-dot" style="background: {{ t.category.color if t.category else '#60a5fa' }}"></span>{% endfor %}
+                    {% for v in day.vax[:3] %}<span class="cal-dot dot-vax"></span>{% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        <div class="flex items-center gap-4 mt-3 text-[0.65rem] text-overlay0 font-bold uppercase tracking-wider">
+            <span class="flex items-center gap-1.5"><span class="cal-dot" style="background:#60a5fa"></span> Tasks</span>
+            <span class="flex items-center gap-1.5"><span class="cal-dot dot-vax"></span> Dog Vax</span>
+        </div>
+        <!-- Day detail (filled by JS) -->
+        <div id="day-detail" class="hidden mt-3 pt-3 border-t border-[#232838]"></div>
+    </section>
+
+    <div class="lg:col-span-2 space-y-5">
+        <!-- ═══ Pets ═══ -->
+        <section class="card p-4 animate-in" style="--i:3">
+            <h2 class="section-title">🐾 The Dogs</h2>
+            <div class="space-y-2.5">
+                {% for pc in pet_cards %}
+                <a href="/dogvax?pet={{ pc.pet.id }}" class="flex items-center gap-3 p-2.5 rounded-xl border border-[#232838] hover:border-[#3a425c] bg-[#10131a] transition-all">
+                    {% if pc.pet.avatar_path %}
+                    <img src="/api/pets/{{ pc.pet.id }}/avatar" class="pet-avatar w-12 h-12" alt="{{ pc.pet.name }}">
+                    {% else %}
+                    <div class="pet-avatar w-12 h-12 flex items-center justify-center text-xl">🐶</div>
+                    {% endif %}
+                    <div class="min-w-0 flex-1">
+                        <div class="font-extrabold text-sm">{{ pc.pet.name }}</div>
+                        {% if pc.next_vax %}
+                        <div class="text-xs {% if pc.overdue_count %}text-red font-bold{% else %}text-subtext0{% endif %} truncate">
+                            {% if pc.overdue_count %}{{ pc.overdue_count }} overdue!{% else %}{{ pc.next_vax.vaccine_name }} in {{ pc.next_vax.days_until_due }}d{% endif %}
+                        </div>
+                        {% else %}<div class="text-xs text-overlay0">No vaccines tracked</div>{% endif %}
+                    </div>
+                    {% if pc.latest_weight %}<span class="glass-badge text-subtext0">{{ pc.latest_weight.weight }} lb</span>{% endif %}
+                </a>
+                {% else %}
+                <div class="text-sm text-overlay0 text-center py-3">No pets yet — add them in the Dog Vax tab.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <!-- ═══ Up Next (14-day agenda) ═══ -->
+        <section class="card p-4 animate-in" style="--i:4">
+            <h2 class="section-title">🔜 Next 14 Days</h2>
+            <div class="space-y-1.5">
+                {% for item in agenda[:8] %}
+                {% set obj = item.obj %}
+                <a href="{% if item.kind == 'task' %}/tasks/{{ obj.id }}{% else %}/dogvax?pet={{ obj.pet_id }}{% endif %}"
+                   class="flex items-center gap-2.5 py-1.5 px-2 rounded-lg hover:bg-[#181d2a] transition-colors">
+                    <span class="text-[0.68rem] font-extrabold text-overlay0 w-12 flex-shrink-0 uppercase">{{ item.date | datefmt('%b %-d') }}</span>
+                    {% if item.kind == 'vax' %}
+                    <span class="cal-dot dot-vax flex-shrink-0"></span>
+                    <span class="text-sm truncate">{{ obj.pet.name }}: {{ obj.vaccine_name }}</span>
+                    {% else %}
+                    <span class="cal-dot flex-shrink-0" style="background: {{ obj.category.color if obj.category else '#60a5fa' }}"></span>
+                    <span class="text-sm truncate">{{ obj.title }}</span>
+                    {% endif %}
+                </a>
+                {% else %}
+                <div class="text-sm text-overlay0 text-center py-3">Nothing scheduled in the next two weeks.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <!-- ═══ Recent notes ═══ -->
+        <section class="card p-4 animate-in" style="--i:5">
+            <div class="flex items-center justify-between">
+                <h2 class="section-title !mb-0">📝 Recent Notes</h2>
+                <a href="/notes" class="text-xs font-bold text-blue hover:underline">All →</a>
+            </div>
+            <div class="space-y-1.5 mt-3">
+                {% for n in recent_notes %}
+                <a href="/notes/{{ n.id }}" class="block py-2 px-2.5 rounded-lg hover:bg-[#181d2a] transition-colors">
+                    <div class="flex items-center gap-2">
+                        <span>{{ n.group.icon }}</span>
+                        <span class="font-bold text-sm truncate flex-1">{{ n.title }}</span>
+                        {% set cs = n.checkbox_stats %}
+                        {% if cs[1] %}<span class="text-[0.65rem] font-bold text-overlay0">{{ cs[0] }}/{{ cs[1] }} ✓</span>{% endif %}
+                        {% if n.images %}<span class="text-[0.65rem]">📷</span>{% endif %}
+                    </div>
+                    <div class="text-xs text-overlay0 mt-0.5">{{ n.updated_at | reltime }}</div>
+                </a>
+                {% else %}
+                <div class="text-sm text-overlay0 text-center py-3">No notes yet — start one in the Notes tab.</div>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+</div>
+
+<!-- Day-detail data + script -->
+<script id="cal-data" type="application/json">{{ cal_json | safe }}</script>
+<script>
+const calData = JSON.parse(document.getElementById('cal-data').textContent);
+function showDay(iso) {
+    const items = calData[iso] || [];
+    const el = document.getElementById('day-detail');
+    const d = new Date(iso + 'T12:00:00');
+    const label = d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+    el.innerHTML = `<div class="text-xs font-extrabold uppercase tracking-wider text-overlay0 mb-2">${label}</div>` +
+        items.map(i => `<a href="${i.url}" class="flex items-center gap-2.5 py-1.5 px-2 rounded-lg hover:bg-[#181d2a] transition-colors">
+            <span class="cal-dot" style="background:${i.color}"></span>
+            <span class="text-sm">${i.icon} ${i.label}</span></a>`).join('');
+    el.classList.remove('hidden');
+    el.style.animation = 'rise-in 0.25s var(--ease-out)';
+}
+</script>
+{% endblock %}

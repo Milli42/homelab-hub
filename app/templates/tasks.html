@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}Tasks — Homelab Hub{% endblock %}
+{% set active_tab = 'tasks' %}
+
+{% block content %}
+{% set attention = overdue + due_today %}
+
+<div class="flex items-center justify-between gap-4 mb-5 animate-in" style="--i:0">
+    <h1 class="text-2xl sm:text-3xl font-extrabold text-text">Tasks</h1>
+    <div class="flex items-center gap-2">
+        <a href="/tasks/new" class="btn btn-primary btn-sm hidden sm:inline-flex">+ New Task</a>
+        <button class="gear-btn" onclick="const s=document.getElementById('tasks-settings'); s.setAttribute('open',''); s.scrollIntoView({behavior:'smooth'})" title="Task settings" aria-label="Task settings">⚙️</button>
+    </div>
+</div>
+
+<!-- Stat tiles (tappable: jump to section) -->
+<div class="grid grid-cols-4 gap-2 sm:gap-3 mb-5">
+    <a href="#sec-attention" class="stat-tile animate-pop {% if overdue %}stat-hot{% endif %}" style="--i:0; --c:#ff6b8a">
+        <div class="stat-num text-red" data-count="{{ overdue|length }}">0</div>
+        <div class="stat-label">Overdue</div>
+    </a>
+    <a href="#sec-attention" class="stat-tile animate-pop {% if due_today %}stat-hot{% endif %}" style="--i:1; --c:#fbbf24">
+        <div class="stat-num text-yellow" data-count="{{ due_today|length }}">0</div>
+        <div class="stat-label">Today</div>
+    </a>
+    <a href="#sec-week" class="stat-tile animate-pop" style="--i:2; --c:#60a5fa">
+        <div class="stat-num text-blue" data-count="{{ upcoming|length }}">0</div>
+        <div class="stat-label">7 Days</div>
+    </a>
+    <a href="#sec-later" class="stat-tile animate-pop" style="--i:3; --c:#a78bfa">
+        <div class="stat-num text-mauve" data-count="{{ (month|length) + (future|length) }}">0</div>
+        <div class="stat-label">Later</div>
+    </a>
+</div>
+
+<!-- Category filter chips -->
+<div class="flex gap-2 overflow-x-auto pb-2 mb-6 animate-in" style="--i:1; scrollbar-width: none;">
+    <a href="/tasks" class="chip {% if selected_category is none %}chip-active{% endif %}">All</a>
+    {% for cat in categories %}
+    <a href="/tasks?category_id={{ cat.id }}"
+       class="chip {% if selected_category == cat.id %}chip-active{% endif %}">
+        {{ cat.icon }} {{ cat.name }}
+    </a>
+    {% endfor %}
+</div>
+
+<!-- ═══ NEEDS ATTENTION (hero zone: overdue + today) ═══ -->
+<section id="sec-attention" class="mb-7 scroll-mt-20">
+    {% if attention %}
+    <div class="section-hero">
+        <h2 class="section-title !text-red !mb-3">
+            ⚠️ Needs Attention <span class="count-badge !text-red" style="border-color: rgba(255,107,138,0.3)">{{ attention|length }}</span>
+        </h2>
+        <div class="grid gap-2.5 lg:grid-cols-2">
+            {% for task in overdue %}
+                {% set card_index = loop.index0 %}
+                {% include "partials/task_card.html" %}
+            {% endfor %}
+            {% for task in due_today %}
+                {% set card_index = (overdue|length) + loop.index0 %}
+                {% include "partials/task_card.html" %}
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <div class="card p-5 text-center animate-in" style="border-color: rgba(74,222,128,0.25); background: linear-gradient(135deg, rgba(74,222,128,0.06), var(--c-card) 60%)">
+        <div class="text-2xl mb-1">🎉</div>
+        <div class="font-bold text-green">All caught up</div>
+        <div class="text-xs text-overlay0 mt-0.5">Nothing overdue, nothing due today.</div>
+    </div>
+    {% endif %}
+</section>
+
+<!-- ═══ NEXT 7 DAYS ═══ -->
+{% if upcoming %}
+<section id="sec-week" class="mb-7 scroll-mt-20">
+    <h2 class="section-title">
+        <span class="status-dot" style="background:#60a5fa"></span> Next 7 Days
+        <span class="count-badge">{{ upcoming|length }}</span>
+    </h2>
+    <div class="grid gap-2.5 lg:grid-cols-2">
+        {% for task in upcoming %}
+            {% set card_index = loop.index0 %}
+            {% include "partials/task_card.html" %}
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+<!-- ═══ LATER (collapsed accordions) ═══ -->
+<div id="sec-later" class="scroll-mt-20"></div>
+{% if month %}
+<details class="collapse-section mb-4" {% if not attention and not upcoming %}open{% endif %}>
+    <summary class="section-title !mb-0 py-2">
+        <span class="chev">▶</span>
+        <span class="status-dot" style="background:#a78bfa"></span> This Month
+        <span class="count-badge">{{ month|length }}</span>
+    </summary>
+    <div class="grid gap-2.5 lg:grid-cols-2 mt-3">
+        {% for task in month %}
+            {% set card_index = loop.index0 %}
+            {% include "partials/task_card.html" %}
+        {% endfor %}
+    </div>
+</details>
+{% endif %}
+
+{% if future %}
+<details class="collapse-section mb-4">
+    <summary class="section-title !mb-0 py-2">
+        <span class="chev">▶</span>
+        <span class="status-dot" style="background:#4a5168"></span> Future
+        <span class="count-badge">{{ future|length }}</span>
+    </summary>
+    <div class="grid gap-2.5 lg:grid-cols-2 mt-3">
+        {% for task in future %}
+            {% set card_index = loop.index0 %}
+            {% include "partials/task_card.html" %}
+        {% endfor %}
+    </div>
+</details>
+{% endif %}
+
+{% if archived %}
+<details class="collapse-section mb-4">
+    <summary class="section-title !mb-0 py-2">
+        <span class="chev">▶</span>
+        <span class="status-dot" style="background:#3a4156"></span> Archived
+        <span class="count-badge">{{ archived|length }}</span>
+    </summary>
+    <div class="grid gap-2.5 lg:grid-cols-2 mt-3">
+        {% for task in archived %}
+            {% include "partials/archived_card.html" %}
+        {% endfor %}
+    </div>
+</details>
+{% endif %}
+
+<!-- Empty state -->
+{% if not overdue and not due_today and not upcoming and not month and not future and not archived %}
+<div class="text-center py-16 animate-in">
+    <div class="text-6xl mb-5 opacity-25">🏠</div>
+    <h2 class="text-xl font-bold text-subtext0 mb-2">No tasks yet</h2>
+    <p class="text-overlay0 mb-6">Add your first maintenance task to get started.</p>
+    <a href="/tasks/new" class="btn btn-primary text-base px-6 py-3">✨ Create Your First Task</a>
+</div>
+{% endif %}
+
+<!-- ═══ IN-PAGE SETTINGS (gear) ═══ -->
+<details class="settings-panel mt-10 scroll-mt-20" id="tasks-settings">
+    <summary class="section-title !mb-0 py-2"><span class="chev">▶</span> ⚙️ Task Settings</summary>
+    <div class="settings-body mt-3 max-w-lg">
+
+<div class="card p-6">
+    <h2 class="text-lg font-bold mb-5">🏷️ Categories</h2>
+
+    <div class="space-y-2 mb-8">
+        {% for cat in categories %}
+        <div class="flex items-center gap-3 p-3 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all"
+             style="border-left: 3px solid {{ cat.color }};">
+            <span class="text-xl w-8 text-center">{{ cat.icon }}</span>
+            <span class="flex-1 font-medium text-sm">{{ cat.name }}</span>
+            <span class="w-4 h-4 rounded-full flex-shrink-0 ring-2 ring-white/10" style="background-color: {{ cat.color }};"></span>
+            <button onclick="editCategory({{ cat.id }}, '{{ cat.name }}', '{{ cat.color }}', '{{ cat.icon }}')"
+                    class="btn btn-ghost btn-xs">Edit</button>
+            <button hx-delete="/api/categories/{{ cat.id }}" hx-target="body" hx-swap="outerHTML"
+                    hx-confirm="Remove '{{ cat.name }}' category?" class="btn btn-danger btn-xs">×</button>
+        </div>
+        {% endfor %}
+    </div>
+
+    <form action="/api/categories" method="POST" class="space-y-4 pt-4 border-t border-white/5">
+        <h2 class="text-lg font-bold">Add Category</h2>
+        <div>
+            <label class="block text-sm text-subtext0 mb-1.5 font-medium">Name</label>
+            <input type="text" name="name" class="input" placeholder="e.g. Automotive" required>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm text-subtext0 mb-1.5 font-medium">Icon</label>
+                <input type="text" name="icon" class="input" value="🔧" maxlength="10" id="icon-input" onfocus="this.select()">
+                <div class="flex flex-wrap gap-1 mt-2" id="emoji-picker">
+                    {% for emoji in ['🔧','🌡️','⚡','🪲','🌿','🧺','🛡️','📋','🚗','💧','🔥','🏠','🔌','🪟','🎨','🪚','🧹','🔑','🛠️','📦'] %}
+                    <button type="button" onclick="document.getElementById('icon-input').value='{{ emoji }}'"
+                            class="w-9 h-9 text-lg hover:bg-white/10 rounded-lg flex items-center justify-center transition-colors">{{ emoji }}</button>
+                    {% endfor %}
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm text-subtext0 mb-1.5 font-medium">Color</label>
+                <div class="flex gap-2">
+                    <input type="color" value="#3b82f6" class="w-12 h-10 rounded-lg cursor-pointer border-0 p-0 bg-transparent"
+                           oninput="this.nextElementSibling.value=this.value">
+                    <input type="text" name="color" value="#3b82f6" class="input flex-1 font-mono text-sm"
+                           pattern="^#[0-9a-fA-F]{6}$" oninput="this.previousElementSibling.value=this.value">
+                </div>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Add Category</button>
+    </form>
+</div>
+
+
+    </div>
+</details>
+<script>
+function editCategory(id, name, color, icon) {
+    const overlay = document.createElement('div');
+    overlay.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50';
+    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+    overlay.innerHTML = `
+        <div class="card p-6 w-full max-w-sm mx-4" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold mb-5">Edit Category</h3>
+            <form action="/api/categories/${id}" method="POST" class="space-y-4">
+                <input type="hidden" name="_method" value="PUT">
+                <div>
+                    <label class="block text-sm text-subtext0 mb-1.5 font-medium">Name</label>
+                    <input type="text" name="name" value="${name}" class="input" required>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm text-subtext0 mb-1.5 font-medium">Icon</label>
+                        <input type="text" name="icon" value="${icon}" maxlength="10" class="input">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-subtext0 mb-1.5 font-medium">Color</label>
+                        <input type="color" name="color" value="${color}" class="w-full h-10 rounded-lg cursor-pointer border-0 p-0 bg-transparent">
+                    </div>
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="submit" class="btn btn-primary flex-1">Save</button>
+                    <button type="button" onclick="this.closest('.fixed').remove()" class="btn btn-ghost">Cancel</button>
+                </div>
+            </form>
+        </div>`;
+    document.body.appendChild(overlay);
+    htmx.process(overlay);
+}
+</script>
+
+{% endblock %}

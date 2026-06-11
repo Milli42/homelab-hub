@@ -1,0 +1,78 @@
+{# Task card — date-block led, urgency-tinted, swipe-right-to-complete on touch #}
+{% set urgency = 'red' if task.is_overdue else ('yellow' if task.days_until_due == 0 else ('blue' if task.days_until_due <= 7 else 'none')) %}
+<div class="swipe-wrap animate-in" style="--i:{{ card_index | default(0) }}">
+    <div class="swipe-under su-done" aria-hidden="true">✅ Complete</div>
+    <div class="swipe-card card p-3.5
+        {% if urgency == 'red' %}card-urgent pulse-overdue{% elif urgency == 'yellow' %}card-today{% endif %}">
+
+        <div class="flex items-center gap-3">
+            <!-- Date block -->
+            <a href="/tasks/{{ task.id }}" class="hover:no-underline flex-shrink-0">
+                <div class="date-block {% if urgency == 'red' %}db-red{% elif urgency == 'yellow' %}db-yellow{% elif urgency == 'blue' %}db-blue{% endif %}">
+                    <span class="db-mon">{{ task.due_date | datefmt('%b') }}</span>
+                    <span class="db-day">{{ task.due_date | datefmt('%-d') }}</span>
+                </div>
+            </a>
+
+            <!-- Title + meta -->
+            <a href="/tasks/{{ task.id }}" class="flex-1 min-w-0 hover:no-underline">
+                <h3 class="font-bold text-text text-[0.95rem] leading-snug truncate">{{ task.title }}</h3>
+                <div class="flex items-center gap-2 mt-1 text-xs">
+                    <span class="font-bold
+                        {% if urgency == 'red' %}text-red
+                        {% elif urgency == 'yellow' %}text-yellow
+                        {% elif urgency == 'blue' %}text-blue
+                        {% else %}text-overlay0{% endif %}">
+                        {% if task.days_until_due < 0 %}{{ -task.days_until_due }}d overdue
+                        {% elif task.days_until_due == 0 %}Due today
+                        {% elif task.days_until_due == 1 %}Tomorrow
+                        {% else %}In {{ task.days_until_due }} days{% endif %}
+                    </span>
+                    {% if task.category %}
+                    <span class="text-overlay0 truncate">{{ task.category.icon }} {{ task.category.name }}</span>
+                    {% endif %}
+                    {% if task.is_recurring %}
+                    <span class="text-overlay0 flex-shrink-0">🔄</span>
+                    {% endif %}
+                </div>
+            </a>
+
+            <!-- Quick actions -->
+            <div class="flex items-center gap-1.5 flex-shrink-0">
+                <form action="/api/tasks/{{ task.id }}/complete" method="POST" class="inline"
+                      data-flash="✅ {{ task.title }} completed" data-swipe-complete
+                      hx-post="/api/tasks/{{ task.id }}/complete"
+                      hx-target="body" hx-swap="outerHTML transition:true">
+                    <button type="submit" class="btn btn-success btn-sm !px-3" title="Complete" aria-label="Complete">✓</button>
+                </form>
+                <button type="button" class="btn btn-ghost btn-sm !px-3" title="More" aria-label="More options"
+                        popovertarget="more-pop-{{ task.id }}">⋯</button>
+            </div>
+        </div>
+
+        <!-- More menu: snooze options + skip -->
+        <div id="more-pop-{{ task.id }}" popover class="pop-menu w-48">
+            <div class="text-[0.62rem] font-extrabold text-overlay0 uppercase tracking-widest px-3 py-1.5">Snooze</div>
+            {% for d, label in [(1, '💤 Tomorrow'), (3, '💤 3 days'), (7, '💤 1 week'), (14, '💤 2 weeks'), (30, '💤 1 month')] %}
+            <button type="button" class="pop-item"
+                    onclick="const f=document.getElementById('snooze-form-{{ task.id }}'); f.querySelector('[name=days]').value={{ d }}; this.closest('[popover]').hidePopover(); f.requestSubmit();">
+                {{ label }}
+            </button>
+            {% endfor %}
+            <div class="border-t my-1" style="border-color: var(--c-border)"></div>
+            <button type="button" class="pop-item"
+                    onclick="this.closest('[popover]').hidePopover(); document.getElementById('skip-form-{{ task.id }}').requestSubmit();">
+                ⏭️ Skip this cycle
+            </button>
+        </div>
+        <form action="/api/tasks/{{ task.id }}/snooze" method="POST" class="hidden"
+              data-flash="💤 {{ task.title }} snoozed" id="snooze-form-{{ task.id }}"
+              hx-post="/api/tasks/{{ task.id }}/snooze" hx-target="body" hx-swap="outerHTML transition:true">
+            <input type="hidden" name="days" value="7">
+        </form>
+        <form action="/api/tasks/{{ task.id }}/skip" method="POST" class="hidden"
+              data-flash="⏭️ {{ task.title }} skipped" id="skip-form-{{ task.id }}"
+              hx-post="/api/tasks/{{ task.id }}/skip" hx-target="body" hx-swap="outerHTML transition:true">
+        </form>
+    </div>
+</div>

@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Notes — Homelab Hub{% endblock %}
+{% set active_tab = 'notes' %}
+
+{% block mobile_add %}<button class="bnav-item bnav-add" onclick="document.getElementById('new-group-modal').classList.remove('hidden')" aria-label="New Group"><span class="add-circle">+</span></button>{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between gap-4 mb-6 animate-in" style="--i:0">
+    <h1 class="text-2xl sm:text-3xl font-extrabold text-text">Notes</h1>
+    <div class="flex items-center gap-2">
+        <button class="btn btn-primary btn-sm hidden sm:inline-flex" onclick="document.getElementById('new-group-modal').classList.remove('hidden')">+ New Group</button>
+        <button class="gear-btn" onclick="const s=document.getElementById('notes-settings'); s.setAttribute('open',''); s.scrollIntoView({behavior:'smooth'})" title="Notes settings" aria-label="Notes settings">⚙️</button>
+    </div>
+</div>
+
+{% if groups %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+    {% for g in groups %}
+    <a href="/notes/group/{{ g.id }}" class="card p-4 animate-pop block" style="--i:{{ loop.index0 }}; border-left: 3px solid {{ g.color }}">
+        <div class="flex items-center gap-3 mb-2">
+            <span class="text-2xl w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style="background: color-mix(in srgb, {{ g.color }} 14%, transparent); border: 1px solid color-mix(in srgb, {{ g.color }} 30%, transparent)">{{ g.icon }}</span>
+            <div class="min-w-0">
+                <div class="font-extrabold truncate">{{ g.name }}</div>
+                <div class="text-xs text-overlay0">{{ g.notes|length }} note{{ 's' if g.notes|length != 1 }}</div>
+            </div>
+        </div>
+        {% for n in g.notes[:3] %}
+        <div class="flex items-center gap-2 text-xs text-subtext0 py-0.5 truncate">
+            {% if n.is_pinned %}<span>📌</span>{% endif %}
+            <span class="truncate">{{ n.title }}</span>
+            {% set cs = n.checkbox_stats %}
+            {% if cs[1] %}<span class="text-overlay0 flex-shrink-0">{{ cs[0] }}/{{ cs[1] }}</span>{% endif %}
+            {% if n.images %}<span class="flex-shrink-0">📷</span>{% endif %}
+        </div>
+        {% endfor %}
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-16 animate-in">
+    <div class="text-6xl mb-5 opacity-25">📝</div>
+    <h2 class="text-xl font-bold text-subtext0 mb-2">No groups yet</h2>
+    <p class="text-overlay0 mb-6">Groups are folders for your project notes — create one to get started.</p>
+    <button class="btn btn-primary text-base px-6 py-3" onclick="document.getElementById('new-group-modal').classList.remove('hidden')">✨ Create Your First Group</button>
+</div>
+{% endif %}
+
+<!-- ═══ IN-PAGE SETTINGS ═══ -->
+<details class="settings-panel mt-10 scroll-mt-20" id="notes-settings">
+    <summary class="section-title !mb-0 py-2"><span class="chev">▶</span> ⚙️ Notes Settings</summary>
+    <div class="settings-body mt-3 max-w-lg">
+        <div class="card p-6">
+            <h2 class="text-lg font-bold mb-4">Manage Groups</h2>
+            <div class="space-y-2">
+                {% for g in groups %}
+                <div class="flex items-center gap-3 p-3 rounded-xl border border-[#232838] bg-[#10131a]" style="border-left: 3px solid {{ g.color }}">
+                    <span class="text-xl w-8 text-center">{{ g.icon }}</span>
+                    <span class="flex-1 font-medium text-sm">{{ g.name }}</span>
+                    <button onclick="editGroup({{ g.id }}, {{ g.name | tojson }}, '{{ g.color }}', '{{ g.icon }}')" class="btn btn-ghost btn-xs">Edit</button>
+                    <form action="/api/notes/groups/{{ g.id }}" method="POST" onsubmit="return confirm('Delete group {{ g.name }} and ALL its notes?')" class="inline">
+                        <input type="hidden" name="_method" value="DELETE">
+                        <button type="submit" class="btn btn-danger btn-xs">×</button>
+                    </form>
+                </div>
+                {% else %}
+                <div class="text-sm text-overlay0">No groups yet.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</details>
+
+<!-- ═══ New group modal ═══ -->
+<div id="new-group-modal" class="modal-overlay hidden" onclick="if (event.target === this) this.classList.add('hidden')">
+    <div class="modal-panel">
+        <h3 class="text-lg font-bold mb-5">New Group</h3>
+        <form action="/api/notes/groups" method="POST" class="space-y-4">
+            <div>
+                <label class="field-label">Name</label>
+                <input type="text" name="name" class="input" placeholder="e.g. Chicken Coop Build" required autofocus>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="field-label">Icon</label>
+                    <input type="text" name="icon" class="input" value="📁" maxlength="10" id="group-icon-input" onfocus="this.select()">
+                    <div class="flex flex-wrap gap-1 mt-2">
+                        {% for emoji in ['📁','🛠️','🌱','🏗️','💡','🖥️','🚜','🏡','🐓','📦','🎨','🔌'] %}
+                        <button type="button" onclick="document.getElementById('group-icon-input').value='{{ emoji }}'"
+                                class="w-9 h-9 text-lg hover:bg-white/10 rounded-lg flex items-center justify-center transition-colors">{{ emoji }}</button>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div>
+                    <label class="field-label">Color</label>
+                    <div class="flex gap-2">
+                        <input type="color" value="#a78bfa" class="w-12 h-11 rounded-lg cursor-pointer border-0 p-0 bg-transparent"
+                               oninput="this.nextElementSibling.value=this.value">
+                        <input type="text" name="color" value="#a78bfa" class="input flex-1 font-mono text-sm"
+                               pattern="^#[0-9a-fA-F]{6}$" oninput="this.previousElementSibling.value=this.value">
+                    </div>
+                </div>
+            </div>
+            <div class="flex gap-2 pt-1">
+                <button type="submit" class="btn btn-primary flex-1">Create Group</button>
+                <button type="button" class="btn btn-ghost" onclick="document.getElementById('new-group-modal').classList.add('hidden')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function editGroup(id, name, color, icon) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+    overlay.innerHTML = `
+        <div class="modal-panel" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold mb-5">Edit Group</h3>
+            <form action="/api/notes/groups/${id}" method="POST" class="space-y-4">
+                <input type="hidden" name="_method" value="PUT">
+                <div><label class="field-label">Name</label><input type="text" name="name" value="${name.replace(/"/g, '&quot;')}" class="input" required></div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="field-label">Icon</label><input type="text" name="icon" value="${icon}" maxlength="10" class="input"></div>
+                    <div><label class="field-label">Color</label><input type="color" name="color" value="${color}" class="w-full h-11 rounded-lg cursor-pointer border-0 p-0 bg-transparent"></div>
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="submit" class="btn btn-primary flex-1">Save</button>
+                    <button type="button" onclick="this.closest('.modal-overlay').remove()" class="btn btn-ghost">Cancel</button>
+                </div>
+            </form>
+        </div>`;
+    document.body.appendChild(overlay);
+}
+</script>
+{% endblock %}
