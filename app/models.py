@@ -243,10 +243,15 @@ class NoteGroup(Base):
     color = Column(String(7), default="#a78bfa")
     icon = Column(String(10), default="📁")
     sort_order = Column(Integer, default=0)
+    pin_hash = Column(String(160), nullable=True)   # null = unlocked; salted PBKDF2 hash of a 6-digit PIN
     created_at = Column(String(19), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
 
     notes = relationship("Note", back_populates="group", cascade="all, delete-orphan",
                          order_by="Note.is_pinned.desc(), Note.updated_at.desc()")
+
+    @property
+    def is_locked(self) -> bool:
+        return bool(self.pin_hash)
 
 
 class Note(Base):
