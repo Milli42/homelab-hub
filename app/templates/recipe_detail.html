@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}{{ recipe.title }} — Recipes — Homelab Hub{% endblock %}
+{% set active_tab = 'recipes' %}
+
+{% block content %}
+<div class="mb-4 animate-in" style="--i:0">
+    <a href="/recipes" class="text-sm text-overlay0 hover:text-text transition-colors">← All recipes</a>
+</div>
+
+<div class="max-w-3xl mx-auto">
+    <!-- ═══ Hero image ═══ -->
+    {% if recipe.main_image %}
+    <div class="card overflow-hidden mb-5 animate-in" style="--i:1">
+        <img src="/recipe-images/{{ recipe.main_image.filename }}" alt="{{ recipe.title }}"
+             class="w-full max-h-80 object-cover cursor-zoom-in"
+             onclick="openLightbox('/recipe-images/{{ recipe.main_image.filename }}')">
+    </div>
+    {% endif %}
+
+    <div class="card p-5 sm:p-7 animate-in" style="--i:2">
+        <!-- ═══ Header ═══ -->
+        <div class="flex items-start justify-between gap-3 mb-3">
+            <div class="min-w-0">
+                <h1 class="text-2xl sm:text-3xl font-extrabold leading-tight">{{ recipe.title }}</h1>
+                <div class="flex flex-wrap items-center gap-2 mt-3">
+                    {% if recipe.category %}
+                    <a href="/recipes?category_id={{ recipe.category_id }}" class="glass-badge"
+                       style="border-color: color-mix(in srgb, {{ recipe.category.color }} 45%, transparent); color: {{ recipe.category.color }}">
+                        {{ recipe.category.icon }} {{ recipe.category.name }}
+                    </a>
+                    {% endif %}
+                    {% if recipe.prep_time %}<span class="glass-badge text-subtext0">🔪 Prep {{ recipe.prep_time }}</span>{% endif %}
+                    {% if recipe.cook_time %}<span class="glass-badge text-subtext0">🔥 Cook {{ recipe.cook_time }}</span>{% endif %}
+                </div>
+            </div>
+            <div class="flex gap-1.5 flex-shrink-0">
+                <a href="/recipes/{{ recipe.id }}?edit=1" class="btn btn-ghost btn-sm">✏️ Edit</a>
+                <button class="btn btn-ghost btn-sm" popovertarget="recipe-menu" aria-label="More">⋯</button>
+                <div id="recipe-menu" popover class="pop-menu min-w-44">
+                    <form action="/api/recipes/{{ recipe.id }}" method="POST" onsubmit="return confirm('Delete this recipe and its photos?')">
+                        <input type="hidden" name="_method" value="DELETE">
+                        <button type="submit" class="pop-item !text-red">🗑 Delete recipe</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ Ingredients ═══ -->
+        <div class="mt-6 pt-5 border-t border-[#232838]">
+            <h2 class="section-title">🧾 Ingredients
+                {% if recipe.ingredient_list %}<span class="count-badge">{{ recipe.ingredient_list|length }}</span>{% endif %}
+            </h2>
+            {% if recipe.ingredient_list %}
+            <div class="space-y-0.5">
+                {% for item in recipe.ingredient_list %}
+                <label class="note-check">
+                    <input type="checkbox">
+                    <span>{{ item }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-sm text-overlay0">No ingredients listed. <a href="/recipes/{{ recipe.id }}?edit=1" class="text-blue underline">Add some</a>.</div>
+            {% endif %}
+        </div>
+
+        <!-- ═══ Directions ═══ -->
+        <div class="mt-6 pt-5 border-t border-[#232838]">
+            <h2 class="section-title">👩‍🍳 Directions
+                {% if recipe.direction_steps %}<span class="count-badge">{{ recipe.direction_steps|length }}</span>{% endif %}
+            </h2>
+            {% if recipe.direction_steps %}
+            <ol class="space-y-3">
+                {% for step in recipe.direction_steps %}
+                <li class="flex gap-3">
+                    <span class="step-num">{{ loop.index }}</span>
+                    <span class="pt-0.5 leading-relaxed text-[0.95rem]">{{ step }}</span>
+                </li>
+                {% endfor %}
+            </ol>
+            {% else %}
+            <div class="text-sm text-overlay0">No directions yet. <a href="/recipes/{{ recipe.id }}?edit=1" class="text-blue underline">Add steps</a>.</div>
+            {% endif %}
+        </div>
+
+        <!-- ═══ Photos ═══ -->
+        <div class="mt-7 pt-5 border-t border-[#232838]">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="section-title !mb-0">📷 Photos {% if recipe.images %}<span class="count-badge">{{ recipe.images|length }}</span>{% endif %}</h2>
+                <form action="/api/recipes/{{ recipe.id }}/images" method="POST" enctype="multipart/form-data" id="photo-form">
+                    <label class="btn btn-ghost btn-sm cursor-pointer">
+                        + Add photo
+                        <input type="file" name="file" accept="image/*" class="hidden" onchange="document.getElementById('photo-form').submit()">
+                    </label>
+                </form>
+            </div>
+            {% if recipe.images %}
+            <div class="flex flex-wrap gap-2.5">
+                {% for img in recipe.images %}
+                <div class="relative group">
+                    <img src="/recipe-images/thumbs/{{ img.thumb_filename }}" class="thumb" alt="{{ img.original_name }}"
+                         onclick="openLightbox('/recipe-images/{{ img.filename }}')" loading="lazy">
+                    {% if loop.first %}<span class="absolute bottom-1 left-1 glass-badge !py-0.5 !px-1.5 !text-[0.6rem]">Main</span>{% endif %}
+                    <form action="/api/recipes/images/{{ img.id }}/delete" method="POST" class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onsubmit="return confirm('Delete this photo?')">
+                        <button type="submit" class="w-6 h-6 rounded-full bg-[#1e2330] border border-[#2f3750] text-red text-xs font-bold flex items-center justify-center hover:bg-red hover:text-[#07090d] transition-colors" aria-label="Delete photo">×</button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+            <p class="text-xs text-overlay0 mt-2">The first photo is used as the cover. Delete it to promote the next one.</p>
+            {% else %}
+            <div class="text-sm text-overlay0">No photos yet.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+    .step-num {
+        flex-shrink: 0;
+        width: 1.75rem; height: 1.75rem;
+        border-radius: 0.55rem;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 800; font-size: 0.85rem;
+        font-variant-numeric: tabular-nums;
+        background: rgba(96,165,250,0.14);
+        color: #60a5fa;
+        border: 1px solid rgba(96,165,250,0.3);
+    }
+</style>
+
+<script>
+// ── Tap-to-check ingredients (visual only; resets on reload) ──
+document.querySelectorAll('.note-check input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', () => {
+        cb.closest('.note-check').classList.toggle('done', cb.checked);
+    });
+});
+
+// ── Lightbox ──
+function openLightbox(src) {
+    const lb = document.createElement('div');
+    lb.className = 'lightbox';
+    lb.onclick = () => lb.remove();
+    lb.innerHTML = `<img src="${src}" alt="">`;
+    document.body.appendChild(lb);
+    document.addEventListener('keydown', function esc(e) {
+        if (e.key === 'Escape') { lb.remove(); document.removeEventListener('keydown', esc); }
+    });
+}
+</script>
+{% endblock %}

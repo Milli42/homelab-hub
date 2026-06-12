@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}Recipes — Homelab Hub{% endblock %}
+{% set active_tab = 'recipes' %}
+{% block mobile_add %}<a href="/recipes/new" class="fab-add" aria-label="New Recipe"></a>{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between gap-4 mb-5 animate-in" style="--i:0">
+    <h1 class="text-2xl sm:text-3xl font-extrabold text-text">Recipes</h1>
+    <div class="flex items-center gap-2">
+        <a href="/recipes/new" class="btn btn-primary btn-sm hidden sm:inline-flex">+ New Recipe</a>
+        <button class="gear-btn" onclick="const s=document.getElementById('recipes-settings'); s.setAttribute('open',''); s.scrollIntoView({behavior:'smooth'})" title="Recipe settings" aria-label="Recipe settings">⚙️</button>
+    </div>
+</div>
+
+{% if categories %}
+<!-- Category filter chips -->
+<div class="flex gap-2 overflow-x-auto pb-2 mb-6 animate-in" style="--i:1; scrollbar-width: none;">
+    <a href="/recipes" class="chip {% if selected_category is none %}chip-active{% endif %}">All</a>
+    {% for cat in categories %}
+    <a href="/recipes?category_id={{ cat.id }}"
+       class="chip {% if selected_category == cat.id %}chip-active{% endif %}">
+        {{ cat.icon }} {{ cat.name }}
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if recipes %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+    {% for r in recipes %}
+    <a href="/recipes/{{ r.id }}" class="card overflow-hidden animate-pop block" style="--i:{{ loop.index0 }}">
+        <div class="recipe-thumb">
+            {% if r.main_image %}
+            <img src="/recipe-images/thumbs/{{ r.main_image.thumb_filename }}" alt="{{ r.title }}" loading="lazy">
+            {% else %}
+            <div class="recipe-thumb-placeholder" style="background: color-mix(in srgb, {{ r.category.color if r.category else '#fb923c' }} 16%, var(--c-card))">
+                <span>{{ r.category.icon if r.category else '🍽️' }}</span>
+            </div>
+            {% endif %}
+            {% if r.category %}
+            <span class="recipe-cat-badge" style="background: color-mix(in srgb, {{ r.category.color }} 88%, black); ">{{ r.category.icon }} {{ r.category.name }}</span>
+            {% endif %}
+        </div>
+        <div class="p-3.5">
+            <div class="font-extrabold leading-snug truncate">{{ r.title }}</div>
+            <div class="flex items-center gap-3 mt-1.5 text-xs text-overlay0">
+                {% if r.prep_time %}<span class="flex items-center gap-1">🔪 {{ r.prep_time }}</span>{% endif %}
+                {% if r.cook_time %}<span class="flex items-center gap-1">🔥 {{ r.cook_time }}</span>{% endif %}
+                {% if r.ingredient_list %}<span class="flex items-center gap-1">🧾 {{ r.ingredient_list|length }}</span>{% endif %}
+            </div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% elif has_any %}
+<!-- Recipes exist but the active category filter matched none -->
+<div class="text-center py-16 animate-in">
+    <div class="text-6xl mb-5 opacity-25">🍽️</div>
+    <h2 class="text-xl font-bold text-subtext0 mb-2">No recipes in this category</h2>
+    <a href="/recipes" class="btn btn-ghost mt-2">Show all recipes</a>
+</div>
+{% else %}
+<div class="text-center py-16 animate-in">
+    <div class="text-6xl mb-5 opacity-25">🍳</div>
+    <h2 class="text-xl font-bold text-subtext0 mb-2">No recipes yet</h2>
+    <p class="text-overlay0 mb-6">Add your first recipe — ingredients, directions, and photos.</p>
+    <a href="/recipes/new" class="btn btn-primary text-base px-6 py-3">✨ Create Your First Recipe</a>
+</div>
+{% endif %}
+
+<!-- ═══ IN-PAGE SETTINGS (gear) ═══ -->
+<details class="settings-panel mt-10 scroll-mt-20" id="recipes-settings">
+    <summary class="section-title !mb-0 py-2"><span class="chev">▶</span> ⚙️ Recipe Settings</summary>
+    <div class="settings-body mt-3 max-w-lg">
+    <div class="card p-6">
+        <h2 class="text-lg font-bold mb-5">🏷️ Categories</h2>
+
+        <div class="space-y-2 mb-8">
+            {% for cat in categories %}
+            <div class="flex items-center gap-3 p-3 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all"
+                 style="border-left: 3px solid {{ cat.color }};">
+                <span class="text-xl w-8 text-center">{{ cat.icon }}</span>
+                <span class="flex-1 font-medium text-sm">{{ cat.name }}</span>
+                <span class="w-4 h-4 rounded-full flex-shrink-0 ring-2 ring-white/10" style="background-color: {{ cat.color }};"></span>
+                <button type="button" onclick="editRecipeCategory({{ cat.id }}, this.dataset.name, this.dataset.color, this.dataset.icon)"
+                        data-name="{{ cat.name }}" data-color="{{ cat.color }}" data-icon="{{ cat.icon }}"
+                        class="btn btn-ghost btn-xs">Edit</button>
+                <form action="/api/recipe-categories/{{ cat.id }}" method="POST" class="inline"
+                      onsubmit="return confirm('Remove the {{ cat.name }} category? Recipes in it will keep their other details.')">
+                    <input type="hidden" name="_method" value="DELETE">
+                    <button type="submit" class="btn btn-danger btn-xs">×</button>
+                </form>
+            </div>
+            {% else %}
+            <div class="text-sm text-overlay0">No categories yet.</div>
+            {% endfor %}
+        </div>
+
+        <form action="/api/recipe-categories" method="POST" class="space-y-4 pt-4 border-t border-white/5">
+            <h2 class="text-lg font-bold">Add Category</h2>
+            <div>
+                <label class="block text-sm text-subtext0 mb-1.5 font-medium">Name</label>
+                <input type="text" name="name" class="input" placeholder="e.g. Breakfast" required>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm text-subtext0 mb-1.5 font-medium">Icon</label>
+                    <input type="text" name="icon" class="input" value="🍽️" maxlength="10" id="rc-icon-input" onfocus="this.select()">
+                    <div class="flex flex-wrap gap-1 mt-2">
+                        {% for emoji in ['🍽️','🌮','🍔','🍝','🍰','🥗','🍳','🍜','🍕','🍣','🥘','🍲','🥩','🍗','🥞','🥧','🍩','🥖','🌯','🍛','🥡','🧁','🍪','☕'] %}
+                        <button type="button" onclick="document.getElementById('rc-icon-input').value='{{ emoji }}'"
+                                class="w-9 h-9 text-lg hover:bg-white/10 rounded-lg flex items-center justify-center transition-colors">{{ emoji }}</button>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm text-subtext0 mb-1.5 font-medium">Color</label>
+                    <div class="flex gap-2">
+                        <input type="color" value="#fb923c" class="w-12 h-10 rounded-lg cursor-pointer border-0 p-0 bg-transparent"
+                               oninput="this.nextElementSibling.value=this.value">
+                        <input type="text" name="color" value="#fb923c" class="input flex-1 font-mono text-sm"
+                               pattern="^#[0-9a-fA-F]{6}$" oninput="this.previousElementSibling.value=this.value">
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Add Category</button>
+        </form>
+    </div>
+    </div>
+</details>
+
+<style>
+    .recipe-thumb {
+        position: relative;
+        aspect-ratio: 16 / 10;
+        background: #11141d;
+        overflow: hidden;
+    }
+    .recipe-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .recipe-thumb-placeholder {
+        width: 100%; height: 100%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 2.75rem; opacity: 0.85;
+    }
+    .recipe-cat-badge {
+        position: absolute; top: 0.6rem; left: 0.6rem;
+        font-size: 0.68rem; font-weight: 800;
+        color: #fff;
+        padding: 0.2rem 0.55rem; border-radius: 9999px;
+        backdrop-filter: blur(4px);
+        box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+        white-space: nowrap;
+    }
+</style>
+
+<script>
+function editRecipeCategory(id, name, color, icon) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    overlay.innerHTML = `
+        <div class="modal-panel" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold mb-5">Edit Category</h3>
+            <form action="/api/recipe-categories/${id}" method="POST" class="space-y-4">
+                <input type="hidden" name="_method" value="PUT">
+                <div>
+                    <label class="field-label">Name</label>
+                    <input type="text" name="name" class="input" required>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="field-label">Icon</label>
+                        <input type="text" name="icon" maxlength="10" class="input">
+                    </div>
+                    <div>
+                        <label class="field-label">Color</label>
+                        <input type="color" name="color" class="w-full h-11 rounded-lg cursor-pointer border-0 p-0 bg-transparent">
+                    </div>
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="submit" class="btn btn-primary flex-1">Save</button>
+                    <button type="button" onclick="this.closest('.modal-overlay').remove()" class="btn btn-ghost">Cancel</button>
+                </div>
+            </form>
+        </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('[name="name"]').value = name;
+    overlay.querySelector('[name="icon"]').value = icon;
+    overlay.querySelector('[name="color"]').value = color;
+}
+</script>
+{% endblock %}

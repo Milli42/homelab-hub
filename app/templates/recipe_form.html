@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% set editing = recipe is not none %}
+{% block title %}{{ 'Edit' if editing else 'New' }} Recipe — Homelab Hub{% endblock %}
+{% set active_tab = 'recipes' %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ '/recipes/' ~ recipe.id if editing else '/recipes' }}" class="text-sm text-overlay0 hover:text-text transition-colors">← {{ 'Back to recipe' if editing else 'Back to Recipes' }}</a>
+</div>
+
+<div class="card p-6 sm:p-8 max-w-2xl mx-auto animate-in">
+    <h1 class="text-2xl font-extrabold mb-7 text-text">{{ 'Edit Recipe' if editing else 'New Recipe' }}</h1>
+
+    <form action="{{ '/api/recipes/' ~ recipe.id if editing else '/api/recipes' }}" method="POST" class="space-y-5">
+        {% if editing %}<input type="hidden" name="_method" value="PUT">{% endif %}
+
+        <div>
+            <label class="block text-sm text-subtext0 mb-1.5 font-medium">Name *</label>
+            <input type="text" name="title" class="input text-lg font-bold" placeholder="e.g. Chicken Tinga Tacos"
+                   value="{{ recipe.title if editing else '' }}" required autofocus>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+                <label class="block text-sm text-subtext0 mb-1.5 font-medium">Category</label>
+                <select name="category_id" class="input">
+                    <option value="">None</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}" {% if editing and recipe.category_id == cat.id %}selected{% endif %}>{{ cat.icon }} {{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm text-subtext0 mb-1.5 font-medium">Prep time</label>
+                <input type="text" name="prep_time" class="input" placeholder="e.g. 15 min"
+                       value="{{ recipe.prep_time or '' if editing else '' }}">
+            </div>
+            <div>
+                <label class="block text-sm text-subtext0 mb-1.5 font-medium">Cook time</label>
+                <input type="text" name="cook_time" class="input" placeholder="e.g. 45 min"
+                       value="{{ recipe.cook_time or '' if editing else '' }}">
+            </div>
+        </div>
+
+        <div>
+            <label class="block text-sm text-subtext0 mb-1.5 font-medium">Ingredients <span class="text-overlay0 font-normal">— one per line</span></label>
+            <textarea name="ingredients" rows="8" class="input font-mono text-sm leading-relaxed"
+                      placeholder="2 cups flour&#10;1 tsp salt&#10;3 eggs">{{ recipe.ingredients if editing else '' }}</textarea>
+        </div>
+
+        <div>
+            <label class="block text-sm text-subtext0 mb-1.5 font-medium">Directions <span class="text-overlay0 font-normal">— one step per line</span></label>
+            <textarea name="directions" rows="10" class="input text-sm leading-relaxed"
+                      placeholder="Preheat oven to 375°F.&#10;Mix dry ingredients.&#10;Bake for 25 minutes.">{{ recipe.directions if editing else '' }}</textarea>
+        </div>
+
+        {% if not editing %}
+        <p class="text-overlay0 text-xs">📷 Photos can be added after the recipe is created.</p>
+        {% endif %}
+
+        <div class="flex gap-3 pt-2">
+            <button type="submit" class="btn btn-primary flex-1 text-base py-3">{{ 'Save Changes' if editing else 'Create Recipe' }}</button>
+            <a href="{{ '/recipes/' ~ recipe.id if editing else '/recipes' }}" class="btn btn-ghost">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
