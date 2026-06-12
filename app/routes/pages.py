@@ -8,6 +8,7 @@ Tab structure:
   /dogvax    → Dog Vax tab (vax.py router)
 """
 import calendar as cal
+import os
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, Request, Query
@@ -154,10 +155,16 @@ async def dashboard(request: Request, month: str | None = Query(None),
 
 # ── Bookmarks tab (embedded Homepage dashboard) ───────────
 
+# URL of the Homepage dashboard to embed. Use the reverse-proxy HTTPS hostname so
+# the iframe works both on-LAN and remotely and avoids mixed-content blocking when
+# the Hub itself is served over https. Override per-deployment with HOMEPAGE_URL.
+HOMEPAGE_URL = os.environ.get("HOMEPAGE_URL", "https://bookmarks.mjaranch.com")
+
+
 @router.get("/bookmarks", response_class=HTMLResponse)
 async def bookmarks_page(request: Request):
     return HTMLResponse(request.app.state.templates.get_template("bookmarks.html").render(
-        request=request))
+        request=request, homepage_url=HOMEPAGE_URL))
 
 
 # ── Tasks tab ─────────────────────────────────────────────
