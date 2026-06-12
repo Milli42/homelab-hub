@@ -236,6 +236,8 @@
             padding: 0.65rem 0.85rem;
             color: #e8ebf4;
             width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
             transition: border-color 0.2s, box-shadow 0.2s;
             font-size: 0.95rem;
             min-height: 2.75rem;
@@ -246,6 +248,19 @@
             box-shadow: 0 0 0 3px rgba(96,165,250,0.18);
         }
         select.input { cursor: pointer; }
+        /* iOS Safari sizes date/time inputs by their native control's intrinsic
+           width and ignores width:100%, so they overflow narrow screens.
+           @supports (-webkit-touch-callout) targets iOS only, leaving the
+           desktop calendar picker indicator intact. */
+        @supports (-webkit-touch-callout: none) {
+            input[type="date"].input,
+            input[type="time"].input,
+            input[type="datetime-local"].input,
+            input[type="month"].input {
+                -webkit-appearance: none;
+                appearance: none;
+            }
+        }
 
         /* ── Filter chips ──────────────────────────── */
         .chip {
