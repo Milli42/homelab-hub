@@ -16,15 +16,22 @@
 {% if groups %}
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
     {% for g in groups %}
+    {% set locked = g.is_locked and g.id not in unlocked %}
     <a href="/notes/group/{{ g.id }}" class="card p-4 animate-pop block" style="--i:{{ loop.index0 }}; border-left: 3px solid {{ g.color }}">
         <div class="flex items-center gap-3 mb-2">
             <span class="text-2xl w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
                   style="background: color-mix(in srgb, {{ g.color }} 14%, transparent); border: 1px solid color-mix(in srgb, {{ g.color }} 30%, transparent)">{{ g.icon }}</span>
-            <div class="min-w-0">
-                <div class="font-extrabold truncate">{{ g.name }}</div>
+            <div class="min-w-0 flex-1">
+                <div class="font-extrabold truncate flex items-center gap-1.5">
+                    <span class="truncate">{{ g.name }}</span>
+                    {% if g.is_locked %}<span class="text-overlay0 flex-shrink-0" title="PIN protected">🔒</span>{% endif %}
+                </div>
                 <div class="text-xs text-overlay0">{{ g.notes|length }} note{{ 's' if g.notes|length != 1 }}</div>
             </div>
         </div>
+        {% if locked %}
+        <div class="text-xs text-overlay0 italic py-1">🔒 Locked — tap to enter PIN</div>
+        {% else %}
         {% for n in g.notes[:3] %}
         <div class="flex items-center gap-2 text-xs text-subtext0 py-0.5 truncate">
             {% if n.is_pinned %}<span>📌</span>{% endif %}
@@ -34,6 +41,7 @@
             {% if n.images %}<span class="flex-shrink-0">📷</span>{% endif %}
         </div>
         {% endfor %}
+        {% endif %}
     </a>
     {% endfor %}
 </div>
@@ -56,8 +64,11 @@
                 {% for g in groups %}
                 <div class="flex items-center gap-3 p-3 rounded-xl border border-[#232838] bg-[#10131a]" style="border-left: 3px solid {{ g.color }}">
                     <span class="text-xl w-8 text-center">{{ g.icon }}</span>
-                    <span class="flex-1 font-medium text-sm">{{ g.name }}</span>
-                    <button onclick="editGroup({{ g.id }}, {{ g.name | tojson }}, '{{ g.color }}', '{{ g.icon }}')" class="btn btn-ghost btn-xs">Edit</button>
+                    <span class="flex-1 font-medium text-sm flex items-center gap-1.5">{{ g.name }}{% if g.is_locked %}<span class="text-overlay0" title="PIN protected">🔒</span>{% endif %}</span>
+                    <button type="button"
+                            data-id="{{ g.id }}" data-name="{{ g.name }}" data-color="{{ g.color }}"
+                            data-icon="{{ g.icon }}" data-locked="{{ 1 if g.is_locked else 0 }}"
+                            onclick="editGroup(this)" class="btn btn-ghost btn-xs">Edit</button>
                     <form action="/api/notes/groups/{{ g.id }}" method="POST" onsubmit="return confirm('Delete group {{ g.name }} and ALL its notes?')" class="inline">
                         <input type="hidden" name="_method" value="DELETE">
                         <button type="submit" class="btn btn-danger btn-xs">×</button>
@@ -80,25 +91,21 @@
                 <label class="field-label">Name</label>
                 <input type="text" name="name" class="input" placeholder="e.g. Chicken Coop Build" required autofocus>
             </div>
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="field-label">Icon</label>
-                    <input type="text" name="icon" class="input" value="📁" maxlength="10" id="group-icon-input" onfocus="this.select()">
-                    <div class="flex flex-wrap gap-1 mt-2">
-                        {% for emoji in ['📁','🛠️','🌱','🏗️','💡','🖥️','🚜','🏡','🐓','📦','🎨','🔌'] %}
-                        <button type="button" onclick="document.getElementById('group-icon-input').value='{{ emoji }}'"
-                                class="w-9 h-9 text-lg hover:bg-white/10 rounded-lg flex items-center justify-center transition-colors">{{ emoji }}</button>
-                        {% endfor %}
-                    </div>
+            <div>
+                <label class="field-label">Icon</label>
+                <div class="flex items-center gap-2">
+                    <span id="create-icon-preview" class="text-2xl w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 border border-[#232838] bg-[#10131a]">📁</span>
+                    <input type="text" name="icon" class="input flex-1" value="📁" maxlength="10" id="group-icon-input" onfocus="this.select()" oninput="document.getElementById('create-icon-preview').textContent=this.value">
                 </div>
-                <div>
-                    <label class="field-label">Color</label>
-                    <div class="flex gap-2">
-                        <input type="color" value="#a78bfa" class="w-12 h-11 rounded-lg cursor-pointer border-0 p-0 bg-transparent"
-                               oninput="this.nextElementSibling.value=this.value">
-                        <input type="text" name="color" value="#a78bfa" class="input flex-1 font-mono text-sm"
-                               pattern="^#[0-9a-fA-F]{6}$" oninput="this.previousElementSibling.value=this.value">
-                    </div>
+                <div class="emoji-grid mt-2" data-emoji-picker data-target="group-icon-input" data-preview="create-icon-preview"></div>
+            </div>
+            <div>
+                <label class="field-label">Color</label>
+                <div class="flex gap-2">
+                    <input type="color" value="#a78bfa" class="w-12 h-11 rounded-lg cursor-pointer border-0 p-0 bg-transparent"
+                           oninput="this.nextElementSibling.value=this.value">
+                    <input type="text" name="color" value="#a78bfa" class="input flex-1 font-mono text-sm"
+                           pattern="^#[0-9a-fA-F]{6}$" oninput="this.previousElementSibling.value=this.value">
                 </div>
             </div>
             <div class="flex gap-2 pt-1">
@@ -109,28 +116,160 @@
     </div>
 </div>
 
+<style>
+    .emoji-grid {
+        display: grid;
+        grid-template-columns: repeat(8, 1fr);
+        gap: 2px;
+        max-height: 9.5rem;
+        overflow-y: auto;
+        padding: 0.35rem;
+        border: 1px solid var(--c-border);
+        border-radius: 0.65rem;
+        background: #10131a;
+    }
+    .emoji-grid button {
+        aspect-ratio: 1;
+        font-size: 1.15rem;
+        border-radius: 0.5rem;
+        display: flex; align-items: center; justify-content: center;
+        background: transparent; border: none; cursor: pointer;
+        transition: background 0.15s, transform 0.15s;
+    }
+    .emoji-grid button:hover { background: rgba(255,255,255,0.08); transform: scale(1.1); }
+    .emoji-grid button.sel { background: rgba(96,165,250,0.22); box-shadow: 0 0 0 1px #60a5fa inset; }
+    @media (min-width: 640px) { .emoji-grid { grid-template-columns: repeat(10, 1fr); } }
+    .pin-dots-input { letter-spacing: 0.6em; text-align: center; font-size: 1.2rem; font-family: ui-monospace, monospace; }
+</style>
+
 <script>
-function editGroup(id, name, color, icon) {
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
-    overlay.innerHTML = `
-        <div class="modal-panel" onclick="event.stopPropagation()">
-            <h3 class="text-lg font-bold mb-5">Edit Group</h3>
-            <form action="/api/notes/groups/${id}" method="POST" class="space-y-4">
-                <input type="hidden" name="_method" value="PUT">
-                <div><label class="field-label">Name</label><input type="text" name="name" value="${name.replace(/"/g, '&quot;')}" class="input" required></div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div><label class="field-label">Icon</label><input type="text" name="icon" value="${icon}" maxlength="10" class="input"></div>
-                    <div><label class="field-label">Color</label><input type="color" name="color" value="${color}" class="w-full h-11 rounded-lg cursor-pointer border-0 p-0 bg-transparent"></div>
-                </div>
-                <div class="flex gap-2 pt-2">
-                    <button type="submit" class="btn btn-primary flex-1">Save</button>
-                    <button type="button" onclick="this.closest('.modal-overlay').remove()" class="btn btn-ghost">Cancel</button>
-                </div>
-            </form>
-        </div>`;
-    document.body.appendChild(overlay);
-}
+    // ── Master emoji list (single source of truth for every picker) ──
+    const NOTE_EMOJIS = [
+        '📁','📂','🗂️','🗃️','🗄️','📋','📝','📄','📑','🔖','📌','📍',
+        '🛠️','🔧','🔨','⚙️','🧰','🪛','🔩','⛏️','🪚','🪝','🧲','🪜',
+        '🔌','🔋','💡','🔦','🪫','🧯','🚨',
+        '🏗️','🏠','🏡','🏘️','🏚️','🏢','🏭','🚪','🪟','🛏️','🛋️','🚿',
+        '🛁','🚽','🧹','🧺','🧼','🧽','🪣','🪠',
+        '🌱','🌿','🍀','🌳','🌲','🌴','🌵','🌻','🌼','🌷','🪴','🍄',
+        '🥕','🍅','🌽','🥬','🥔','🍓','🍎','🍯',
+        '🐓','🐔','🐣','🥚','🐝','🐛','🦋','🐞','🐕','🐈','🐟','🐠','🦮','🐇','🐾',
+        '💻','🖥️','⌨️','🖱️','🖨️','🕹️','💾','💿','📀','🧮','📡','📶','🛰️','🌐','🔭','🔬','🧪','🧫','🧬',
+        '🌡️','⚗️','📷','📸','🎥','📹',
+        '🚗','🚙','🚜','🛻','🏍️','🚲','⛽','🛞',
+        '📦','📮','🎨','🖌️','🖍️','✏️','📐','📏','✂️','📎','🧷',
+        '💰','💵','💳','🧾','📊','📈','📉',
+        '🗓️','📅','⏰','⌚','🎯','⭐','🔥','⚡','❤️','🎵','🎮','🍳','🛒','☕','🧊',
+        '🔒','🔓','🔐','🔑','🗝️','🛡️','♻️','⚠️','✅','❗','ℹ️','🏷️'
+    ];
+
+    function buildEmojiPicker(container) {
+        const input = document.getElementById(container.dataset.target);
+        const preview = container.dataset.preview ? document.getElementById(container.dataset.preview) : null;
+        if (!input) return;
+        container.innerHTML = '';
+        const mark = () => container.querySelectorAll('button').forEach(b =>
+            b.classList.toggle('sel', b.textContent === input.value));
+        NOTE_EMOJIS.forEach(em => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = em;
+            b.onclick = () => { input.value = em; if (preview) preview.textContent = em; mark(); };
+            container.appendChild(b);
+        });
+        mark();
+    }
+    document.querySelectorAll('[data-emoji-picker]').forEach(buildEmojiPicker);
+
+    // ── Edit group (name / icon / color / PIN) ──
+    function editGroup(btn) {
+        const d = btn.dataset;
+        const id = d.id;
+        const locked = d.locked === '1';
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+        overlay.innerHTML = `
+            <div class="modal-panel" onclick="event.stopPropagation()">
+                <h3 class="text-lg font-bold mb-5">Edit Group</h3>
+                <form action="/api/notes/groups/${id}" method="POST" class="space-y-4">
+                    <input type="hidden" name="_method" value="PUT">
+                    <input type="hidden" name="pin_action" id="eg-pin-action" value="">
+                    <div>
+                        <label class="field-label">Name</label>
+                        <input type="text" name="name" class="input" required>
+                    </div>
+                    <div>
+                        <label class="field-label">Icon</label>
+                        <div class="flex items-center gap-2">
+                            <span id="eg-icon-preview" class="text-2xl w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 border border-[#232838] bg-[#10131a]"></span>
+                            <input type="text" name="icon" id="eg-icon" class="input flex-1" maxlength="10"
+                                   oninput="document.getElementById('eg-icon-preview').textContent=this.value">
+                        </div>
+                        <div class="emoji-grid mt-2" data-emoji-picker data-target="eg-icon" data-preview="eg-icon-preview"></div>
+                    </div>
+                    <div>
+                        <label class="field-label">Color</label>
+                        <input type="color" name="color" id="eg-color" class="w-full h-11 rounded-lg cursor-pointer border-0 p-0 bg-transparent">
+                    </div>
+
+                    <div class="border-t border-[#232838] pt-4">
+                        <label class="field-label flex items-center gap-1.5">🔒 PIN Lock</label>
+                        <div id="eg-pin-status" class="text-xs text-overlay0 mb-2"></div>
+                        <div id="eg-pin-fields" class="space-y-2 hidden">
+                            <div id="eg-current-wrap" class="hidden">
+                                <input type="text" inputmode="numeric" name="current_pin" maxlength="6" pattern="\\d{6}"
+                                       class="input pin-dots-input" placeholder="Current PIN" autocomplete="off">
+                            </div>
+                            <input type="text" inputmode="numeric" name="pin" id="eg-new-pin" maxlength="6" pattern="\\d{6}"
+                                   class="input pin-dots-input" placeholder="New 6-digit PIN" autocomplete="off">
+                        </div>
+                        <div class="flex flex-wrap gap-2 mt-1">
+                            <button type="button" id="eg-pin-set-btn" class="btn btn-ghost btn-xs"></button>
+                            <button type="button" id="eg-pin-remove-btn" class="btn btn-danger btn-xs hidden">Remove PIN</button>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 pt-2">
+                        <button type="submit" class="btn btn-primary flex-1">Save</button>
+                        <button type="button" onclick="this.closest('.modal-overlay').remove()" class="btn btn-ghost">Cancel</button>
+                    </div>
+                </form>
+            </div>`;
+        document.body.appendChild(overlay);
+
+        // Populate values (set via DOM, never string-interpolation — avoids escaping bugs)
+        overlay.querySelector('[name="name"]').value = d.name;
+        const iconEl = overlay.querySelector('#eg-icon');
+        iconEl.value = d.icon;
+        overlay.querySelector('#eg-icon-preview').textContent = d.icon;
+        overlay.querySelector('#eg-color').value = d.color;
+        buildEmojiPicker(overlay.querySelector('[data-emoji-picker]'));
+
+        // PIN UI state machine
+        const statusEl = overlay.querySelector('#eg-pin-status');
+        const fields = overlay.querySelector('#eg-pin-fields');
+        const currentWrap = overlay.querySelector('#eg-current-wrap');
+        const actionEl = overlay.querySelector('#eg-pin-action');
+        const setBtn = overlay.querySelector('#eg-pin-set-btn');
+        const removeBtn = overlay.querySelector('#eg-pin-remove-btn');
+        statusEl.textContent = locked ? 'This folder is locked.' : 'No PIN — contents are visible to anyone.';
+        setBtn.textContent = locked ? 'Change PIN' : 'Set PIN';
+        removeBtn.classList.toggle('hidden', !locked);
+
+        setBtn.onclick = () => {
+            const showing = !fields.classList.contains('hidden') && actionEl.value === 'set';
+            if (showing) { fields.classList.add('hidden'); actionEl.value = ''; return; }
+            actionEl.value = 'set';
+            fields.classList.remove('hidden');
+            currentWrap.classList.toggle('hidden', !locked); // need current PIN only when changing
+        };
+        removeBtn.onclick = () => {
+            actionEl.value = 'remove';
+            fields.classList.remove('hidden');
+            currentWrap.classList.remove('hidden');
+            overlay.querySelector('#eg-new-pin').classList.add('hidden');
+            statusEl.textContent = 'Enter current PIN, then Save to remove the lock.';
+        };
+    }
 </script>
 {% endblock %}

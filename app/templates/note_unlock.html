@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ group.name }} — Locked — Homelab Hub{% endblock %}
+{% set active_tab = 'notes' %}
+
+{% block content %}
+<div class="mb-4 animate-in" style="--i:0">
+    <a href="/notes" class="text-sm text-overlay0 hover:text-text transition-colors">← All groups</a>
+</div>
+
+<div class="max-w-sm mx-auto mt-8 sm:mt-16 animate-in" style="--i:1">
+    <div class="card p-7 text-center">
+        <div class="text-5xl mb-3">🔒</div>
+        <h1 class="text-xl font-extrabold mb-1 flex items-center justify-center gap-2">
+            <span>{{ group.icon }}</span><span class="truncate">{{ group.name }}</span>
+        </h1>
+        <p class="text-sm text-overlay0 mb-5">This folder is protected. Enter its 6-digit PIN to continue.</p>
+
+        {% if error %}
+        <div class="mb-4 text-sm font-semibold text-red" id="pin-error">Incorrect PIN — try again.</div>
+        {% endif %}
+
+        <form action="/api/notes/groups/{{ group.id }}/unlock" method="POST" class="space-y-4">
+            <input type="text" name="pin" inputmode="numeric" pattern="\d{6}" maxlength="6" required autofocus autocomplete="off"
+                   class="input text-center"
+                   style="letter-spacing: 0.7em; font-size: 1.5rem; font-family: ui-monospace, monospace; padding-left: 0.7em;"
+                   placeholder="••••••"
+                   oninput="this.value=this.value.replace(/\D/g,''); if(this.value.length===6) this.form.requestSubmit();">
+            <button type="submit" class="btn btn-primary w-full">Unlock</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
