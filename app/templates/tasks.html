@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Tasks — Homelab Hub{% endblock %}
 {% set active_tab = 'tasks' %}
+{% block mobile_add %}<a href="/tasks/new" class="fab-add" aria-label="New Task"></a>{% endblock %}
 
 {% block content %}
 {% set attention = overdue + due_today %}

@@ -355,27 +355,26 @@
         }
         .bnav-item .bnav-ico { font-size: 1.35rem; line-height: 1; }
         .bnav-item.active { color: #60a5fa; }
-        .bnav-add {
-            flex: 0 0 auto;
-            width: 70px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .bnav-add .add-circle {
-            position: relative;
-            width: 48px; height: 48px;
+        /* ── Floating add button (bottom-left, mobile only) ── */
+        .fab-add {
+            position: fixed;
+            left: 1rem;
+            bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 1rem);
+            z-index: 60;
+            width: 56px; height: 56px;
             border-radius: 50%;
             background: #60a5fa;
             color: #07090d;
-            margin-top: -18px;
-            box-shadow: 0 4px 16px rgba(96,165,250,0.4), 0 0 0 5px #0b0d12;
-            transition: transform 0.25s var(--spring);
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(96,165,250,0.45), 0 2px 6px rgba(0,0,0,0.35);
+            transition: transform 0.25s var(--spring), box-shadow 0.2s;
         }
+        .fab-add:active { transform: scale(0.92); }
         /* Plus drawn with CSS bars so it's pixel-centered everywhere
-           (iOS renders the "+" text glyph off-center in its circle). */
-        .bnav-add .add-circle::before,
-        .bnav-add .add-circle::after {
+           (iOS renders the "+" text glyph off-center). */
+        .fab-add::before,
+        .fab-add::after {
             content: '';
             position: absolute;
             top: 50%;
@@ -383,9 +382,10 @@
             background: currentColor;
             border-radius: 2px;
         }
-        .bnav-add .add-circle::before { width: 18px; height: 3px; transform: translate(-50%, -50%); }
-        .bnav-add .add-circle::after  { width: 3px;  height: 18px; transform: translate(-50%, -50%); }
-        .bnav-add:active .add-circle { transform: scale(0.92); }
+        .fab-add::before { width: 20px; height: 3px; transform: translate(-50%, -50%); }
+        .fab-add::after  { width: 3px;  height: 20px; transform: translate(-50%, -50%); }
+        /* Desktop has its own in-page add buttons; hide the mobile FAB there */
+        @media (min-width: 640px) { .fab-add { display: none; } }
 
         /* ── Badges ────────────────────────────────── */
         .glass-badge {
@@ -752,7 +752,6 @@
         <a href="/tasks" class="bnav-item {% if active_tab == 'tasks' %}active{% endif %}">
             <span class="bnav-ico">✅</span> Tasks
         </a>
-        {% block mobile_add %}<a href="/tasks/new" class="bnav-item bnav-add" aria-label="New"><span class="add-circle" aria-hidden="true"></span></a>{% endblock %}
         <a href="/notes" class="bnav-item {% if active_tab == 'notes' %}active{% endif %}">
             <span class="bnav-ico">📝</span> Notes
         </a>
@@ -760,6 +759,9 @@
             <span class="bnav-ico">🐾</span> Dog Vax
         </a>
     </nav>
+
+    <!-- Floating add button (bottom-left, mobile). Defined per-page; absent on Home/Links. -->
+    {% block mobile_add %}{% endblock %}
 
     <div id="toast-container"></div>
 </body>

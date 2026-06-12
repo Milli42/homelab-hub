@@ -2,7 +2,7 @@
 {% block title %}{{ group.name }} — Notes — Homelab Hub{% endblock %}
 {% set active_tab = 'notes' %}
 
-{% block mobile_add %}<button class="bnav-item bnav-add" onclick="document.getElementById('new-note-modal').classList.remove('hidden')" aria-label="New Note"><span class="add-circle">+</span></button>{% endblock %}
+{% block mobile_add %}<button class="fab-add" onclick="document.getElementById('new-note-modal').classList.remove('hidden')" aria-label="New Note"></button>{% endblock %}
 
 {% block content %}
 <div class="mb-4 animate-in" style="--i:0">
