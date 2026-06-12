@@ -306,3 +306,72 @@ class NoteImage(Base):
     __table_args__ = (
         Index("idx_note_images_note", "note_id"),
     )
+
+
+# ════════════════════════════════════════════════════════════
+# Recipes module
+# ════════════════════════════════════════════════════════════
+
+class RecipeCategory(Base):
+    __tablename__ = "recipe_categories"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), unique=True, nullable=False)
+    color = Column(String(7), default="#fb923c")   # hex color
+    icon = Column(String(10), default="🍽️")
+
+    recipes = relationship("Recipe", back_populates="category")
+
+
+class Recipe(Base):
+    __tablename__ = "recipes"
+
+    id = Column(Integer, primary_key=True)
+    title = Column(String(255), nullable=False)
+    category_id = Column(Integer, ForeignKey("recipe_categories.id"), nullable=True)
+    prep_time = Column(String(40), nullable=True)         # free text, e.g. "15 min"
+    cook_time = Column(String(40), nullable=True)         # free text, e.g. "45 min"
+    ingredients = Column(Text, default="")               # one per line
+    directions = Column(Text, default="")                # one step per line
+    created_at = Column(String(19), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+    updated_at = Column(String(19), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+
+    category = relationship("RecipeCategory", back_populates="recipes")
+    images = relationship("RecipeImage", back_populates="recipe", cascade="all, delete-orphan",
+                          order_by="RecipeImage.uploaded_at.asc()")
+
+    __table_args__ = (
+        Index("idx_recipes_category", "category_id"),
+    )
+
+    @property
+    def main_image(self):
+        """First uploaded image — used as the card/hero thumbnail."""
+        return self.images[0] if self.images else None
+
+    @property
+    def ingredient_list(self) -> list[str]:
+        """Non-empty ingredient lines."""
+        return [ln.strip() for ln in (self.ingredients or "").splitlines() if ln.strip()]
+
+    @property
+    def direction_steps(self) -> list[str]:
+        """Non-empty direction lines, in order."""
+        return [ln.strip() for ln in (self.directions or "").splitlines() if ln.strip()]
+
+
+class RecipeImage(Base):
+    __tablename__ = "recipe_images"
+
+    id = Column(Integer, primary_key=True)
+    recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="CASCADE"), nullable=False)
+    filename = Column(String(255), nullable=False)        # UUID name on disk
+    thumb_filename = Column(String(255), nullable=False)  # generated thumbnail
+    original_name = Column(String(255), nullable=False)
+    uploaded_at = Column(String(19), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+
+    recipe = relationship("Recipe", back_populates="images")
+
+    __table_args__ = (
+        Index("idx_recipe_images_recipe", "recipe_id"),
+    )

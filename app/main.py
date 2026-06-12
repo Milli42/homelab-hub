@@ -2,7 +2,8 @@
 Homelab Hub — FastAPI application entry point.
 
 Modules: Dashboard (unified), Tasks (home maintenance), Notes (project notes),
-Dog Vax (pet vaccines & weights). Each module is a router under app/routes/.
+Dog Vax (pet vaccines & weights), Recipes (recipe box). Each module is a router
+under app/routes/.
 """
 import os
 from contextlib import asynccontextmanager
@@ -16,7 +17,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy import select
 
 from app.database import init_db, async_session
-from app.models import Category
+from app.models import Category, RecipeCategory
 
 
 # ── Template loader ───────────────────────────────────────
@@ -93,6 +94,24 @@ async def seed_categories():
         await session.commit()
 
 
+DEFAULT_RECIPE_CATEGORIES = [
+    ("Mexican", "#ef4444", "🌮"),
+    ("American", "#3b82f6", "🍔"),
+    ("Italian", "#22c55e", "🍝"),
+    ("Desserts", "#ec4899", "🍰"),
+]
+
+
+async def seed_recipe_categories():
+    async with async_session() as session:
+        result = await session.execute(select(RecipeCategory))
+        if result.first() is not None:
+            return
+        for name, color, icon in DEFAULT_RECIPE_CATEGORIES:
+            session.add(RecipeCategory(name=name, color=color, icon=icon))
+        await session.commit()
+
+
 # ── Auth middleware ───────────────────────────────────────
 
 API_KEY = os.environ.get("API_KEY", "")
@@ -113,6 +132,7 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
 async def lifespan(app: FastAPI):
     await init_db()
     await seed_categories()
+    await seed_recipe_categories()
     app.state.templates = templates
     yield
 
@@ -149,12 +169,18 @@ notes_dir = os.environ.get("NOTES_DIR", "data/notes")
 os.makedirs(os.path.join(notes_dir, "thumbs"), exist_ok=True)
 app.mount("/note-images", StaticFiles(directory=notes_dir), name="note-images")
 
+# Recipe images + thumbnails
+recipes_dir = os.environ.get("RECIPES_DIR", "data/recipes")
+os.makedirs(os.path.join(recipes_dir, "thumbs"), exist_ok=True)
+app.mount("/recipe-images", StaticFiles(directory=recipes_dir), name="recipe-images")
+
 # Routes — order matters: specific page routes before parameterized ones
 from app.routes.tasks import router as tasks_router, widget_router
 from app.routes.images import router as images_router
 from app.routes.categories import router as categories_router
 from app.routes.notes import router as notes_router
 from app.routes.vax import router as vax_router
+from app.routes.recipes import router as recipes_router
 from app.routes.pages import router as pages_router
 
 app.include_router(tasks_router)
@@ -163,4 +189,5 @@ app.include_router(images_router)
 app.include_router(categories_router)
 app.include_router(notes_router)
 app.include_router(vax_router)
+app.include_router(recipes_router)
 app.include_router(pages_router)
