@@ -1,6 +1,6 @@
 services:
   homelab-hub:
-    image: ghcr.io/milli42/homelab-hub:1.1.4
+    image: ghcr.io/milli42/homelab-hub:1.1.5
     container_name: homelab-hub
     restart: unless-stopped
     ports:
