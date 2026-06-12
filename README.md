@@ -6,6 +6,7 @@ Unified self-hosted home dashboard: home maintenance tasks, project notes (with 
 - **Dashboard** — unified calendar (task + vaccine due dates), needs-attention feed, pet countdowns, recent notes
 - **Tasks** — recurring home maintenance (complete/skip/snooze, categories, photos)
 - **Notes** — project notes in groups/folders, interactive checkboxes, photo thumbnails
+- **Recipes** — recipe box by category, ingredients (tap to check off), step-by-step directions, photo thumbnails
 - **Dog Vax** — vaccine records with re-vax archiving, weight chart, file attachments, backups
 
 ## Stack

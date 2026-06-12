@@ -19,12 +19,13 @@ COPY --from=builder /build/.venv /app/.venv
 COPY --from=builder /build/app /app/app
 COPY scripts/ /app/scripts/
 
-RUN mkdir -p /data/images /data/notes/thumbs /data/uploads
+RUN mkdir -p /data/images /data/notes/thumbs /data/recipes/thumbs /data/uploads
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV DATABASE_PATH=/data/homelab_hub.db
 ENV IMAGES_DIR=/data/images
 ENV NOTES_DIR=/data/notes
+ENV RECIPES_DIR=/data/recipes
 ENV UPLOADS_DIR=/data/uploads
 
 EXPOSE 8000
