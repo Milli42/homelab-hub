@@ -355,10 +355,10 @@
         }
         .bnav-item .bnav-ico { font-size: 1.35rem; line-height: 1; }
         .bnav-item.active { color: #60a5fa; }
-        /* ── Floating add button (bottom-left, mobile only) ── */
+        /* ── Floating add button (bottom-right, mobile only) ── */
         .fab-add {
             position: fixed;
-            left: 1rem;
+            right: 1rem;
             bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 1rem);
             z-index: 60;
             width: 56px; height: 56px;
@@ -760,7 +760,7 @@
         </a>
     </nav>
 
-    <!-- Floating add button (bottom-left, mobile). Defined per-page; absent on Home/Links. -->
+    <!-- Floating add button (bottom-right, mobile). Defined per-page; absent on Home/Links. -->
     {% block mobile_add %}{% endblock %}
 
     <div id="toast-container"></div>
