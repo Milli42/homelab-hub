@@ -363,20 +363,28 @@
             justify-content: center;
         }
         .bnav-add .add-circle {
+            position: relative;
             width: 48px; height: 48px;
             border-radius: 50%;
             background: #60a5fa;
             color: #07090d;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.6rem;
-            font-weight: 800;
-            line-height: 1;
             margin-top: -18px;
             box-shadow: 0 4px 16px rgba(96,165,250,0.4), 0 0 0 5px #0b0d12;
             transition: transform 0.25s var(--spring);
         }
+        /* Plus drawn with CSS bars so it's pixel-centered everywhere
+           (iOS renders the "+" text glyph off-center in its circle). */
+        .bnav-add .add-circle::before,
+        .bnav-add .add-circle::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            background: currentColor;
+            border-radius: 2px;
+        }
+        .bnav-add .add-circle::before { width: 18px; height: 3px; transform: translate(-50%, -50%); }
+        .bnav-add .add-circle::after  { width: 3px;  height: 18px; transform: translate(-50%, -50%); }
         .bnav-add:active .add-circle { transform: scale(0.92); }
 
         /* ── Badges ────────────────────────────────── */
@@ -744,7 +752,7 @@
         <a href="/tasks" class="bnav-item {% if active_tab == 'tasks' %}active{% endif %}">
             <span class="bnav-ico">✅</span> Tasks
         </a>
-        {% block mobile_add %}<a href="/tasks/new" class="bnav-item bnav-add" aria-label="New"><span class="add-circle">+</span></a>{% endblock %}
+        {% block mobile_add %}<a href="/tasks/new" class="bnav-item bnav-add" aria-label="New"><span class="add-circle" aria-hidden="true"></span></a>{% endblock %}
         <a href="/notes" class="bnav-item {% if active_tab == 'notes' %}active{% endif %}">
             <span class="bnav-ico">📝</span> Notes
         </a>
