@@ -108,6 +108,25 @@ async def recipe_detail(request: Request, recipe_id: int, edit: int = 0,
 
 # ── Recipes API ───────────────────────────────────────────
 
+@router.get("/api/recipes/picker-data")
+async def recipes_picker_data(db: AsyncSession = Depends(get_db)):
+    """Lightweight JSON list of all recipes for the slot-machine picker."""
+    q = (select(Recipe).options(selectinload(Recipe.category), selectinload(Recipe.images))
+         .order_by(Recipe.title))
+    recipes = (await db.execute(q)).scalars().all()
+    return [{
+        "id": r.id,
+        "title": r.title,
+        "category_id": r.category_id,
+        "category_name": r.category.name if r.category else None,
+        "color": r.category.color if r.category else "#fb923c",
+        "icon": r.category.icon if r.category else "🍽️",
+        "thumb": f"/recipe-images/thumbs/{r.main_image.thumb_filename}" if r.main_image else None,
+        "prep_time": r.prep_time,
+        "cook_time": r.cook_time,
+    } for r in recipes]
+
+
 def _parse_recipe_form(form) -> dict:
     cat = form.get("category_id")
     return {
