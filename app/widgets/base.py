@@ -60,26 +60,50 @@ class Provider:
     fields: list[dict]          # UI inputs shown in the edit modal
     needs_url: bool = True      # whether the API-URL field is shown
     url_hint: str = ""          # placeholder for the API-URL field
+    # Catalog of stats the user can pick from (Homepage-style "fields"). Each entry:
+    # {"key", "label", optional "default": False to be off unless explicitly chosen}.
+    # Empty for providers whose stats are dynamic (e.g. Home Assistant entities).
+    stats: list[dict] = field(default_factory=list)
 
     def meta(self) -> dict:
         """JSON-safe metadata the front-end uses to render the config form."""
         return {"key": self.key, "label": self.label,
                 "needs_url": self.needs_url, "url_hint": self.url_hint,
-                "fields": self.fields}
+                "fields": self.fields, "stats": self.stats}
 
 
 PROVIDERS: dict[str, Provider] = {}
 
 
 def register(key: str, label: str, *, fields: list[dict] | None = None,
-             needs_url: bool = True, url_hint: str = ""):
+             needs_url: bool = True, url_hint: str = "", stats: list[dict] | None = None):
     """Decorator: register a provider's fetch fn + its UI field metadata."""
     def deco(fn: FetchFn) -> FetchFn:
         PROVIDERS[key] = Provider(key=key, label=label, fetch=fn,
                                   fields=fields or [], needs_url=needs_url,
-                                  url_hint=url_hint)
+                                  url_hint=url_hint, stats=stats or [])
         return fn
     return deco
+
+
+def pick(config: dict, catalog: list[dict], available: dict[str, "Stat"]) -> list["Stat"]:
+    """Reduce a provider's computed stats to the user's selection.
+
+    `catalog` defines the full set + display order; `available` maps stat key ->
+    Stat for the ones that could actually be computed this poll. The user's chosen
+    keys live in config["stats"]. Order always follows the catalog (matches the
+    checkbox order in the UI). When nothing is selected — a brand-new or pre-picker
+    bookmark — fall back to the catalog's defaults (entries not marked default=False)."""
+    chosen = set(config.get("stats") or [])
+    if chosen:
+        keys = [s["key"] for s in catalog
+                if s["key"] in chosen and s["key"] in available]
+    else:
+        keys = []
+    if not keys:  # no/blank/all-invalid selection → show catalog defaults
+        keys = [s["key"] for s in catalog
+                if s.get("default", True) and s["key"] in available]
+    return [available[k] for k in keys]
 
 
 # ── Small formatting / error helpers shared by providers ──

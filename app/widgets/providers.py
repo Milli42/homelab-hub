@@ -8,7 +8,7 @@ expected to be tuned against live services during testing.
 """
 from __future__ import annotations
 
-from .base import Stat, WidgetResult, compact, register
+from .base import Stat, WidgetResult, compact, pick, register
 
 # Credential field reused by api-key services.
 _API_KEY = [{"name": "api_key", "label": "API Key", "type": "password", "required": True}]
@@ -48,8 +48,16 @@ async def home_assistant(base_url, config, client) -> WidgetResult:
 
 
 # ── Uptime Kuma (public status page) ──────────────────────
+_UPTIMEKUMA_STATS = [
+    {"key": "up", "label": "Up"},
+    {"key": "down", "label": "Down"},
+    {"key": "uptime", "label": "Uptime"},
+]
+
+
 @register("uptimekuma", "Uptime Kuma", url_hint="https://status.example.com",
-          fields=[{"name": "slug", "label": "Status Page Slug", "type": "text", "required": True}])
+          fields=[{"name": "slug", "label": "Status Page Slug", "type": "text", "required": True}],
+          stats=_UPTIMEKUMA_STATS)
 async def uptime_kuma(base_url, config, client) -> WidgetResult:
     slug = (config.get("slug") or "").strip()
     if not slug:
@@ -67,19 +75,28 @@ async def uptime_kuma(base_url, config, client) -> WidgetResult:
             up += 1
         else:
             down += 1
+    available = {"up": Stat("Up", str(up)), "down": Stat("Down", str(down))}
     day_vals = [v for k, v in uptime.items() if str(k).endswith("_24")]
-    stats = [Stat("Up", str(up)), Stat("Down", str(down))]
-    if day_vals:
-        stats.append(Stat("Uptime", f"{round(sum(day_vals) / len(day_vals) * 100, 1)}%"))
-    return WidgetResult(ok=True, stats=stats)
+    if day_vals:  # uptime only when the status page reports 24h figures
+        available["uptime"] = Stat("Uptime", f"{round(sum(day_vals) / len(day_vals) * 100, 1)}%")
+    return WidgetResult(ok=True, stats=pick(config, _UPTIMEKUMA_STATS, available))
 
 
 # ── AdGuard Home ──────────────────────────────────────────
+_ADGUARD_STATS = [
+    {"key": "queries", "label": "Queries"},
+    {"key": "blocked", "label": "Blocked"},
+    {"key": "blocked_pct", "label": "Blocked %"},
+    {"key": "latency", "label": "Latency", "default": False},
+]
+
+
 @register("adguard", "AdGuard Home", url_hint="http://adguard.local:3000",
           fields=[
               {"name": "username", "label": "Username", "type": "text", "required": True},
               {"name": "password", "label": "Password", "type": "password", "required": True},
-          ])
+          ],
+          stats=_ADGUARD_STATS)
 async def adguard(base_url, config, client) -> WidgetResult:
     auth = (config.get("username", ""), config.get("password", ""))
     r = await client.get(f"{base_url}/control/stats", auth=auth)
@@ -88,19 +105,30 @@ async def adguard(base_url, config, client) -> WidgetResult:
     queries = d.get("num_dns_queries", 0) or 0
     blocked = d.get("num_blocked_filtering", 0) or 0
     pct = round(blocked / queries * 100, 1) if queries else 0
-    return WidgetResult.of(
-        Stat("Queries", compact(queries)),
-        Stat("Blocked", compact(blocked)),
-        Stat("Blocked", f"{pct}%"),
-    )
+    latency_ms = round((d.get("avg_processing_time", 0) or 0) * 1000)  # seconds → ms
+    available = {
+        "queries": Stat("Queries", compact(queries)),
+        "blocked": Stat("Blocked", compact(blocked)),
+        "blocked_pct": Stat("Blocked", f"{pct}%"),
+        "latency": Stat("Latency", f"{latency_ms} ms"),
+    }
+    return WidgetResult(ok=True, stats=pick(config, _ADGUARD_STATS, available))
 
 
 # ── Nginx Proxy Manager ───────────────────────────────────
+_NPM_STATS = [
+    {"key": "enabled", "label": "Enabled"},
+    {"key": "disabled", "label": "Disabled"},
+    {"key": "total", "label": "Total"},
+]
+
+
 @register("npm", "Nginx Proxy Manager", url_hint="http://npm.local:81",
           fields=[
               {"name": "username", "label": "Email", "type": "text", "required": True},
               {"name": "password", "label": "Password", "type": "password", "required": True},
-          ])
+          ],
+          stats=_NPM_STATS)
 async def nginx_proxy_manager(base_url, config, client) -> WidgetResult:
     # NPM uses short-lived bearer tokens; with the widget cache, one login per poll
     # is acceptable, so we don't bother persisting the token.
@@ -117,15 +145,24 @@ async def nginx_proxy_manager(base_url, config, client) -> WidgetResult:
     hosts = r.json()
     enabled = sum(1 for h in hosts if h.get("enabled"))
     total = len(hosts)
-    return WidgetResult.of(
-        Stat("Enabled", str(enabled)),
-        Stat("Disabled", str(total - enabled)),
-        Stat("Total", str(total)),
-    )
+    available = {
+        "enabled": Stat("Enabled", str(enabled)),
+        "disabled": Stat("Disabled", str(total - enabled)),
+        "total": Stat("Total", str(total)),
+    }
+    return WidgetResult(ok=True, stats=pick(config, _NPM_STATS, available))
 
 
 # ── SABnzbd ───────────────────────────────────────────────
-@register("sabnzbd", "SABnzbd", url_hint="http://sabnzbd.local:8080", fields=_API_KEY)
+_SABNZBD_STATS = [
+    {"key": "rate", "label": "Rate"},
+    {"key": "queue", "label": "Queue"},
+    {"key": "left", "label": "Left"},
+]
+
+
+@register("sabnzbd", "SABnzbd", url_hint="http://sabnzbd.local:8080", fields=_API_KEY,
+          stats=_SABNZBD_STATS)
 async def sabnzbd(base_url, config, client) -> WidgetResult:
     r = await client.get(f"{base_url}/api",
                          params={"mode": "queue", "output": "json",
@@ -136,47 +173,77 @@ async def sabnzbd(base_url, config, client) -> WidgetResult:
         return WidgetResult.fail(str(body.get("error") or "Bad API key"))
     q = body["queue"]
     speed = (q.get("speed") or "0").strip()           # e.g. "1.2 M" (MB/s)
-    return WidgetResult.of(
-        Stat("Rate", f"{speed}B/s"),                  # -> "1.2 MB/s"
-        Stat("Queue", str(q.get("noofslots", 0))),
-        Stat("Left", q.get("timeleft", "0:00:00")),
-    )
+    available = {
+        "rate": Stat("Rate", f"{speed}B/s"),          # -> "1.2 MB/s"
+        "queue": Stat("Queue", str(q.get("noofslots", 0))),
+        "left": Stat("Left", q.get("timeleft", "0:00:00")),
+    }
+    return WidgetResult(ok=True, stats=pick(config, _SABNZBD_STATS, available))
 
 
 # ── Jellyfin (active streams) ─────────────────────────────
-@register("jellyfin", "Jellyfin", url_hint="http://jellyfin.local:8096", fields=_API_KEY)
+_JELLYFIN_STATS = [
+    {"key": "streams", "label": "Streams"},
+    {"key": "direct", "label": "Direct"},
+    {"key": "transcode", "label": "Transcode"},
+]
+
+
+@register("jellyfin", "Jellyfin", url_hint="http://jellyfin.local:8096", fields=_API_KEY,
+          stats=_JELLYFIN_STATS)
 async def jellyfin(base_url, config, client) -> WidgetResult:
     r = await client.get(f"{base_url}/Sessions",
                          headers={"X-Emby-Token": config.get("api_key", "")})
     r.raise_for_status()
     playing = [s for s in r.json() if s.get("NowPlayingItem")]
     transcodes = sum(1 for s in playing if s.get("TranscodingInfo"))
-    return WidgetResult.of(
-        Stat("Streams", str(len(playing))),
-        Stat("Direct", str(len(playing) - transcodes)),
-        Stat("Transcode", str(transcodes)),
-    )
+    available = {
+        "streams": Stat("Streams", str(len(playing))),
+        "direct": Stat("Direct", str(len(playing) - transcodes)),
+        "transcode": Stat("Transcode", str(transcodes)),
+    }
+    return WidgetResult(ok=True, stats=pick(config, _JELLYFIN_STATS, available))
 
 
 # ── Radarr ────────────────────────────────────────────────
-@register("radarr", "Radarr", url_hint="http://radarr.local:7878", fields=_API_KEY)
+_RADARR_STATS = [
+    {"key": "movies", "label": "Movies"},
+    {"key": "ready", "label": "Ready", "default": False},
+    {"key": "missing", "label": "Missing"},
+    {"key": "queue", "label": "Queue"},
+]
+
+
+@register("radarr", "Radarr", url_hint="http://radarr.local:7878", fields=_API_KEY,
+          stats=_RADARR_STATS)
 async def radarr(base_url, config, client) -> WidgetResult:
     h = {"X-Api-Key": config.get("api_key", "")}
     movies = await client.get(f"{base_url}/api/v3/movie", headers=h)
     movies.raise_for_status()
     mlist = movies.json()
+    ready = sum(1 for m in mlist if m.get("hasFile"))           # downloaded & available
     missing = sum(1 for m in mlist if m.get("monitored") and not m.get("hasFile"))
     queue = await client.get(f"{base_url}/api/v3/queue", headers=h, params={"pageSize": 1})
     queue.raise_for_status()
-    return WidgetResult.of(
-        Stat("Movies", str(len(mlist))),
-        Stat("Missing", str(missing)),
-        Stat("Queue", str(queue.json().get("totalRecords", 0))),
-    )
+    available = {
+        "movies": Stat("Movies", str(len(mlist))),
+        "ready": Stat("Ready", str(ready)),
+        "missing": Stat("Missing", str(missing)),
+        "queue": Stat("Queue", str(queue.json().get("totalRecords", 0))),
+    }
+    return WidgetResult(ok=True, stats=pick(config, _RADARR_STATS, available))
 
 
 # ── Sonarr ────────────────────────────────────────────────
-@register("sonarr", "Sonarr", url_hint="http://sonarr.local:8989", fields=_API_KEY)
+_SONARR_STATS = [
+    {"key": "series", "label": "Series"},
+    {"key": "wanted", "label": "Wanted"},
+    {"key": "queue", "label": "Queue"},
+]
+
+
+@register("sonarr", "Sonarr", url_hint="http://sonarr.local:8989", fields=_API_KEY,
+          stats=_SONARR_STATS)
 async def sonarr(base_url, config, client) -> WidgetResult:
     h = {"X-Api-Key": config.get("api_key", "")}
     series = await client.get(f"{base_url}/api/v3/series", headers=h)
@@ -185,15 +252,24 @@ async def sonarr(base_url, config, client) -> WidgetResult:
     wanted.raise_for_status()
     queue = await client.get(f"{base_url}/api/v3/queue", headers=h, params={"pageSize": 1})
     queue.raise_for_status()
-    return WidgetResult.of(
-        Stat("Series", str(len(series.json()))),
-        Stat("Wanted", str(wanted.json().get("totalRecords", 0))),
-        Stat("Queue", str(queue.json().get("totalRecords", 0))),
-    )
+    available = {
+        "series": Stat("Series", str(len(series.json()))),
+        "wanted": Stat("Wanted", str(wanted.json().get("totalRecords", 0))),
+        "queue": Stat("Queue", str(queue.json().get("totalRecords", 0))),
+    }
+    return WidgetResult(ok=True, stats=pick(config, _SONARR_STATS, available))
 
 
 # ── Prowlarr ──────────────────────────────────────────────
-@register("prowlarr", "Prowlarr", url_hint="http://prowlarr.local:9696", fields=_API_KEY)
+_PROWLARR_STATS = [
+    {"key": "indexers", "label": "Indexers"},
+    {"key": "grabs", "label": "Grabs"},
+    {"key": "queries", "label": "Queries"},
+]
+
+
+@register("prowlarr", "Prowlarr", url_hint="http://prowlarr.local:9696", fields=_API_KEY,
+          stats=_PROWLARR_STATS)
 async def prowlarr(base_url, config, client) -> WidgetResult:
     h = {"X-Api-Key": config.get("api_key", "")}
     idx = await client.get(f"{base_url}/api/v1/indexer", headers=h)
@@ -204,8 +280,9 @@ async def prowlarr(base_url, config, client) -> WidgetResult:
     rows = stats.json().get("indexers") or []
     grabs = sum(i.get("numberOfGrabs", 0) for i in rows)
     queries = sum(i.get("numberOfQueries", 0) for i in rows)
-    return WidgetResult.of(
-        Stat("Indexers", str(enabled)),
-        Stat("Grabs", compact(grabs)),
-        Stat("Queries", compact(queries)),
-    )
+    available = {
+        "indexers": Stat("Indexers", str(enabled)),
+        "grabs": Stat("Grabs", compact(grabs)),
+        "queries": Stat("Queries", compact(queries)),
+    }
+    return WidgetResult(ok=True, stats=pick(config, _PROWLARR_STATS, available))
