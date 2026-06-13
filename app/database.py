@@ -37,6 +37,9 @@ _COLUMN_MIGRATIONS = [
     ("note_groups", "pin_hash", "VARCHAR(160)"),
     ("bookmark_groups", "columns", "INTEGER DEFAULT 0"),
     ("bookmarks", "width", "INTEGER DEFAULT 4"),
+    ("bookmarks", "widget_type", "VARCHAR(40)"),
+    ("bookmarks", "widget_url", "VARCHAR(2048)"),
+    ("bookmarks", "widget_config", "TEXT"),
 ]
 
 

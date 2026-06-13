@@ -49,7 +49,9 @@
     </div>
     <div class="bm-grid" data-group-id="{{ g.id }}">
         {% for b in g.bookmarks %}
-        <div class="bm-tile animate-pop" data-id="{{ b.id }}" style="--i:{{ loop.index0 }}; --span: {{ b.width }}">
+        <div class="bm-tile animate-pop{% if b.has_widget %} has-widget{% endif %}" data-id="{{ b.id }}"
+             {% if b.has_widget %}data-widget data-bm-id="{{ b.id }}"{% endif %}
+             style="--i:{{ loop.index0 }}; --span: {{ b.width }}">
             <a class="bm-hit" href="{{ b.url }}" target="_blank" rel="noopener noreferrer"></a>
             <span class="bm-icon">
                 {% if b.icon_is_image %}<img class="bm-img" src="{{ b.icon }}" alt="" loading="lazy">
@@ -60,11 +62,15 @@
                 <span class="bm-title">{{ b.title }}</span>
                 {% if b.subtitle %}<span class="bm-sub">{{ b.subtitle }}</span>{% endif %}
             </span>
+            {% if b.has_widget %}<div class="bm-stats" data-stats aria-live="polite"><span class="bm-stat-skel">·· ·· ··</span></div>{% endif %}
             <div class="bm-actions">
                 <button type="button" class="bm-act" title="Edit"
                         data-id="{{ b.id }}" data-group="{{ b.group_id }}" data-title="{{ b.title }}"
                         data-url="{{ b.url }}" data-subtitle="{{ b.subtitle or '' }}" data-icon="{{ b.icon or '' }}"
-                        data-width="{{ b.width }}" onclick="editBookmark(this)">✎</button>
+                        data-width="{{ b.width }}"
+                        data-widget-type="{{ b.widget_type or '' }}" data-widget-url="{{ b.widget_url or '' }}"
+                        data-widget-config='{{ b.widget_config_safe | tojson }}'
+                        onclick="editBookmark(this)">✎</button>
                 <form action="/api/bookmarks/{{ b.id }}" method="POST"
                       onsubmit="return confirm('Remove “{{ b.title }}”?')">
                     <input type="hidden" name="_method" value="DELETE">
@@ -232,6 +238,34 @@
     .bm-title { font-weight: 700; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .bm-sub { font-size: 0.72rem; color: #76819a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
 
+    /* ── Live-stats widget strip (Homepage-style) ──
+       The icon + title stay on the first flex line; the stats wrap to a full-width
+       second line below them. */
+    .bm-tile.has-widget { flex-wrap: wrap; align-content: center; }
+    .bm-stats {
+        order: 3; flex-basis: 100%; width: 100%;
+        display: flex; gap: 0.35rem; margin-top: 0.5rem;
+    }
+    .bm-stat {
+        flex: 1 1 0; min-width: 0; text-align: center;
+        padding: 0.4rem 0.3rem; border-radius: 0.55rem;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid var(--c-border);
+    }
+    .bm-stat-val {
+        display: block; font-weight: 800; font-size: 0.92rem; line-height: 1.15;
+        color: var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .bm-stat-label {
+        display: block; margin-top: 2px; font-size: 0.58rem; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.06em; color: #76819a;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .bm-stat-skel { color: #4a5268; font-size: 0.85rem; letter-spacing: 0.15em; }
+    /* Offline / error state — a quiet muted line, never a broken tile. */
+    .bm-stats.is-offline { color: #76819a; font-size: 0.72rem; font-weight: 600; align-items: center; }
+    .bm-stat-off::before { content: '●'; color: var(--c-red, #ff6b8a); margin-right: 0.35rem; font-size: 0.6rem; vertical-align: middle; }
+
     /* Per-tile edit/delete only appear in edit mode — never on hover or by
        default, so mobile isn't cluttered with constant ✎ / × controls. */
     .bm-actions {
@@ -315,11 +349,30 @@
     .emoji-grid button:hover { background: rgba(255,255,255,0.08); transform: scale(1.1); }
     .emoji-grid button.sel { background: rgba(96,165,250,0.22); box-shadow: 0 0 0 1px #60a5fa inset; }
     @media (min-width: 640px) { .emoji-grid { grid-template-columns: repeat(10, 1fr); } }
+
+    /* ── Live-widget config (edit modal) ── */
+    .bm-widget-fields:not(:empty) {
+        margin-top: 0.6rem; padding: 0.75rem 0.85rem; border-radius: 0.7rem;
+        border: 1px solid var(--c-border); background: #10131a;
+    }
+    .bm-ent-head, .bm-ent-row {
+        display: grid; grid-template-columns: 1.5fr 1.1fr 0.7fr 1.55rem;
+        gap: 0.35rem; align-items: center;
+    }
+    .bm-ent-head {
+        font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.05em;
+        color: #76819a; font-weight: 700; margin-bottom: 0.25rem; padding: 0 0.1rem;
+    }
+    .bm-ent-row { margin-bottom: 0.35rem; }
+    .bm-ent-row .input { padding: 0.4rem 0.5rem; font-size: 0.8rem; }
+    .bm-check { display: flex; align-items: center; gap: 0.55rem; font-size: 0.82rem; color: #aab3c8; cursor: pointer; }
+    .bm-check input { width: 1rem; height: 1rem; flex-shrink: 0; }
 </style>
 
 <script src="/static/js/sortable.min.js"></script>
 <script>
     const BM_GROUPS = {{ groups_json|safe }};
+    const BM_PROVIDERS = {{ providers_json|safe }};
 
     const bmEsc = s => String(s ?? '').replace(/[&<>"']/g, c =>
         ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -526,6 +579,14 @@
                         <div class="emoji-grid mt-2" data-emoji-picker data-target="bm-icon-input"></div>
                         <p class="text-xs text-overlay0 mt-2">Tip: paste a logo URL (e.g. from <code>dashboard-icons</code>) for a crisp app logo. Leave blank for a lettered badge.</p>
                     </div>
+                    <div class="bm-widget-section pt-3 border-t border-white/5">
+                        <label class="field-label">Live widget <span class="text-overlay0 font-normal normal-case">(optional — show API stats on the tile)</span></label>
+                        <select name="widget_type" id="bm-widget-type" class="input" onchange="bmOnWidgetTypeChange(this)">
+                            <option value="">None — plain bookmark</option>
+                            ${BM_PROVIDERS.map(p => `<option value="${bmEsc(p.key)}">${bmEsc(p.label)}</option>`).join('')}
+                        </select>
+                        <div id="bm-widget-fields" class="bm-widget-fields"></div>
+                    </div>
                     <div class="flex gap-2 pt-1">
                         <button type="submit" class="btn btn-primary flex-1">${editing ? 'Save' : 'Add Bookmark'}</button>
                         <button type="button" class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
@@ -543,8 +604,85 @@
             form.querySelector('[name="icon"]').value = data.icon || '';
             form.querySelector('[name="width"]').value = data.width || 4;
         }
+        // Live-widget config — pre-select the provider and render its fields.
+        const wtSelect = form.querySelector('#bm-widget-type');
+        if (editing && data.widgetType) wtSelect.value = data.widgetType;
+        bmOnWidgetTypeChange(wtSelect, editing ? data : null);
         buildEmojiPicker(overlay.querySelector('[data-emoji-picker]'));
         bmRenderIconPreview();
+    }
+
+    // ── Live-widget config form (built from BM_PROVIDERS metadata) ──
+    const bmProvider = key => BM_PROVIDERS.find(p => p.key === key) || null;
+
+    function bmEntityRow(ent) {
+        ent = ent || {};
+        return `<div class="bm-ent-row">
+            <input type="text" name="w_entity_id" class="input" placeholder="sensor.energy_today" value="${bmEsc(ent.entity_id || '')}">
+            <input type="text" name="w_entity_label" class="input" placeholder="Energy" value="${bmEsc(ent.label || '')}">
+            <input type="text" name="w_entity_unit" class="input" placeholder="kWh" value="${bmEsc(ent.unit || '')}">
+            <button type="button" class="bm-act bm-act-danger" title="Remove" onclick="this.closest('.bm-ent-row').remove()">×</button>
+        </div>`;
+    }
+    function bmAddEntityRow(btn) {
+        btn.closest('.bm-entities').querySelector('.bm-ent-list')
+           .insertAdjacentHTML('beforeend', bmEntityRow());
+    }
+
+    function bmRenderWidgetFields(provider, cfg, widgetUrl, editing) {
+        cfg = cfg || {};
+        let html = '';
+        if (provider.needs_url) {
+            html += `<div class="mt-3">
+                <label class="field-label">API URL</label>
+                <input type="url" name="widget_url" class="input" placeholder="${bmEsc(provider.url_hint || '')}" value="${bmEsc(widgetUrl || '')}">
+                <p class="text-xs text-overlay0 mt-1">Leave blank to use the bookmark URL above.</p>
+            </div>`;
+        }
+        (provider.fields || []).forEach(f => {
+            if (f.type === 'entities') {
+                const ents = Array.isArray(cfg.entities) ? cfg.entities : [];
+                const rows = (ents.length ? ents : [{}]).map(bmEntityRow).join('');
+                html += `<div class="bm-entities mt-3">
+                    <label class="field-label">${bmEsc(f.label)}</label>
+                    <div class="bm-ent-head"><span>Entity ID</span><span>Label</span><span>Unit</span><span></span></div>
+                    <div class="bm-ent-list">${rows}</div>
+                    <button type="button" class="btn btn-ghost btn-xs mt-2" onclick="bmAddEntityRow(this)">+ Add entity</button>
+                </div>`;
+            } else if (f.type === 'password') {
+                html += `<div class="mt-3">
+                    <label class="field-label">${bmEsc(f.label)}</label>
+                    <input type="password" name="w_${bmEsc(f.name)}" class="input" autocomplete="new-password"
+                           placeholder="${editing ? 'leave blank to keep current' : ''}"${f.required && !editing ? ' required' : ''}>
+                </div>`;
+            } else {
+                const v = cfg[f.name] != null ? cfg[f.name] : '';
+                html += `<div class="mt-3">
+                    <label class="field-label">${bmEsc(f.label)}</label>
+                    <input type="text" name="w_${bmEsc(f.name)}" class="input" value="${bmEsc(v)}"${f.required ? ' required' : ''}>
+                </div>`;
+            }
+        });
+        html += `<label class="bm-check mt-3">
+            <input type="checkbox" name="w_ignore_tls"${cfg.verify_tls === false ? ' checked' : ''}>
+            <span>Ignore certificate errors (self-signed / internal HTTPS)</span>
+        </label>`;
+        return html;
+    }
+
+    function bmOnWidgetTypeChange(sel, editData) {
+        const container = document.getElementById('bm-widget-fields');
+        const provider = bmProvider(sel.value);
+        if (!provider) { container.innerHTML = ''; return; }
+        // Only repopulate from edit data when the selected type matches the saved one.
+        const matched = editData && editData.widgetType === provider.key;
+        const cfg = matched ? (editData.widgetConfig || {}) : {};
+        const widgetUrl = matched ? (editData.widgetUrl || '') : '';
+        const editing = !!(editData && editData.id);
+        container.innerHTML = bmRenderWidgetFields(provider, cfg, widgetUrl, editing);
+        // A widget needs room — nudge a brand-new ⅓ tile up to ½.
+        const wsel = sel.closest('form').querySelector('[name="width"]');
+        if (wsel && wsel.value === '4' && !editing) wsel.value = '6';
     }
 
     function bmRenderIconPreview() {
@@ -565,9 +703,12 @@
 
     function editBookmark(btn) {
         const d = btn.dataset;
+        let widgetConfig = {};
+        try { widgetConfig = JSON.parse(d.widgetConfig || '{}'); } catch { widgetConfig = {}; }
         openBookmarkModal(null, {
             id: d.id, group: d.group, title: d.title,
             url: d.url, subtitle: d.subtitle, icon: d.icon, width: d.width,
+            widgetType: d.widgetType || '', widgetUrl: d.widgetUrl || '', widgetConfig,
         });
     }
 
@@ -613,8 +754,48 @@
         buildEmojiPicker(overlay.querySelector('[data-emoji-picker]'));
     }
 
+    // ── Live-widget polling — fetch each widget tile's stats server-side ──
+    function bmRenderStats(el, data) {
+        if (!data || !data.ok || !(data.stats && data.stats.length)) {
+            el.className = 'bm-stats is-offline';
+            el.innerHTML = `<span class="bm-stat-off">${bmEsc((data && data.error) || 'offline')}</span>`;
+            return;
+        }
+        el.className = 'bm-stats';
+        el.innerHTML = data.stats.map(s =>
+            `<span class="bm-stat"><span class="bm-stat-val">${bmEsc(s.value)}</span>` +
+            `<span class="bm-stat-label">${bmEsc(s.label)}</span></span>`).join('');
+    }
+    async function bmFetchWidget(tile) {
+        const el = tile.querySelector('[data-stats]');
+        if (!el) return;
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 9000);
+        try {
+            const r = await fetch(`/api/bookmarks/${tile.dataset.bmId}/widget`, { signal: ctrl.signal });
+            bmRenderStats(el, await r.json());
+        } catch {
+            bmRenderStats(el, { ok: false, error: 'offline' });
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+    let bmWidgetTimer = null;
+    function bmInitWidgets() {
+        const tiles = [...document.querySelectorAll('.bm-tile[data-widget]')];
+        if (!tiles.length) return;
+        const refresh = () => tiles.forEach(bmFetchWidget);
+        refresh();
+        if (bmWidgetTimer) clearInterval(bmWidgetTimer);
+        bmWidgetTimer = setInterval(() => { if (!document.hidden) refresh(); }, 30000);
+    }
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) document.querySelectorAll('.bm-tile[data-widget]').forEach(bmFetchWidget);
+    });
+
     // Apply saved collapse state + tile size on load (synchronously to avoid a flash).
     applyCollapsed();
     applyBmDensity();
+    bmInitWidgets();
 </script>
 {% endblock %}

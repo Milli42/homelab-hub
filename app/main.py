@@ -135,6 +135,8 @@ async def lifespan(app: FastAPI):
     await seed_recipe_categories()
     app.state.templates = templates
     yield
+    from app.widgets import aclose as close_widget_clients
+    await close_widget_clients()
 
 
 # ── App ───────────────────────────────────────────────────

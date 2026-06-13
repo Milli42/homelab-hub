@@ -5,6 +5,7 @@ bookmark has a title, URL, optional subtitle, and a smart icon (emoji or image
 URL). Mirrors the Recipes module's category management and form-dispatch style.
 """
 import json
+import time
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -15,6 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models import Bookmark, BookmarkGroup
+from app.widgets import PROVIDERS, fetch_widget, provider_meta
 
 router = APIRouter(tags=["bookmarks"])
 
@@ -52,8 +54,12 @@ async def bookmarks_page(request: Request, db: AsyncSession = Depends(get_db)):
         [{"id": g.id, "name": g.name, "icon": g.icon} for g in groups]
     ).replace("</", "<\\/")  # harden against </script> breakout; rendered with |safe
 
+    # Provider metadata drives the modal's "Live widget" config form.
+    providers_json = json.dumps(provider_meta()).replace("</", "<\\/")
+
     return HTMLResponse(request.app.state.templates.get_template("bookmarks.html").render(
-        request=request, groups=groups, total=total, groups_json=groups_json))
+        request=request, groups=groups, total=total,
+        groups_json=groups_json, providers_json=providers_json))
 
 
 # ── Bookmark groups (categories) ──────────────────────────
@@ -115,16 +121,57 @@ async def bookmark_group_dispatch(group_id: int, request: Request, db: AsyncSess
 
 # ── Bookmarks ─────────────────────────────────────────────
 
-def _parse_bookmark_form(form) -> dict:
+def _build_widget_config(form, widget_type: str, existing: dict) -> dict:
+    """Assemble widget_config from the provider's declared fields. Blank password
+    fields on edit preserve the previously stored secret (merge with `existing`)."""
+    provider = PROVIDERS[widget_type]
+    cfg: dict = {}
+    for f in provider.fields:
+        name, ftype = f["name"], f.get("type", "text")
+        if ftype == "entities":
+            ids = form.getlist("w_entity_id")
+            labels = form.getlist("w_entity_label")
+            units = form.getlist("w_entity_unit")
+            ents = []
+            for i, eid in enumerate(ids):
+                eid = str(eid or "").strip()
+                if not eid:
+                    continue
+                ents.append({
+                    "entity_id": eid,
+                    "label": str(labels[i] if i < len(labels) else "").strip(),
+                    "unit": str(units[i] if i < len(units) else "").strip(),
+                })
+            cfg[name] = ents
+        elif ftype == "password":
+            val = str(form.get(f"w_{name}") or "")
+            cfg[name] = val if val else str(existing.get(name, ""))  # blank → keep current
+        else:
+            cfg[name] = str(form.get(f"w_{name}") or "").strip()
+    # Every provider makes HTTP calls, so the TLS toggle is global to the form.
+    cfg["verify_tls"] = not bool(form.get("w_ignore_tls"))
+    return cfg
+
+
+def _parse_bookmark_form(form, existing_config: dict | None = None) -> dict:
     gid = form.get("group_id")
-    return {
+    widget_type = str(form.get("widget_type") or "").strip()
+    valid_widget = widget_type if widget_type in PROVIDERS else ""
+    data = {
         "group_id": int(gid) if gid else None,
         "title": str(form.get("title", "")).strip(),
         "url": str(form.get("url", "")).strip(),
         "subtitle": str(form.get("subtitle") or "").strip() or None,
         "icon": str(form.get("icon") or "").strip(),
         "width": _parse_width(form.get("width")),
+        "widget_type": valid_widget or None,
+        "widget_url": (str(form.get("widget_url") or "").strip() or None) if valid_widget else None,
+        "widget_config": None,
     }
+    if valid_widget:
+        cfg = _build_widget_config(form, valid_widget, existing_config or {})
+        data["widget_config"] = json.dumps(cfg) if cfg else None
+    return data
 
 
 async def _validate_bookmark(db: AsyncSession, data: dict):
@@ -179,7 +226,7 @@ async def bookmark_dispatch(bookmark_id: int, request: Request, db: AsyncSession
         return _redirect(request, "/bookmarks")
 
     if method == "PUT":
-        data = _parse_bookmark_form(form)
+        data = _parse_bookmark_form(form, bm.widget_config_dict)
         await _validate_bookmark(db, data)
         for k, v in data.items():
             setattr(bm, k, v)
@@ -187,3 +234,28 @@ async def bookmark_dispatch(bookmark_id: int, request: Request, db: AsyncSession
         return _redirect(request, "/bookmarks")
 
     raise HTTPException(405, "Use _method=PUT or _method=DELETE")
+
+
+# ── Widget live-stats proxy ───────────────────────────────
+
+# Short in-process cache so many open tabs / fast polls don't hammer the service.
+_WIDGET_CACHE: dict[int, tuple[float, dict]] = {}
+_WIDGET_TTL = 25.0
+
+
+@router.get("/api/bookmarks/{bookmark_id}/widget")
+async def bookmark_widget(bookmark_id: int, db: AsyncSession = Depends(get_db)):
+    """Server-side fetch of a bookmark's provider stats. Returns
+    {ok, stats: [{label, value}], error}; never exposes credentials."""
+    now = time.monotonic()
+    cached = _WIDGET_CACHE.get(bookmark_id)
+    if cached and now - cached[0] < _WIDGET_TTL:
+        return cached[1]
+    bm = await db.get(Bookmark, bookmark_id)
+    if not bm:
+        raise HTTPException(404, "Bookmark not found")
+    if not bm.has_widget:
+        return {"ok": False, "stats": [], "error": "No widget configured"}
+    result = (await fetch_widget(bm)).as_dict()
+    _WIDGET_CACHE[bookmark_id] = (now, result)
+    return result

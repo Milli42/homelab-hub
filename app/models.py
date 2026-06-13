@@ -411,6 +411,10 @@ class Bookmark(Base):
     # Tile width as a span of a 12-column grid: 2=⅙ 3=¼ 4=⅓ 6=½ 8=⅔ 12=full row.
     width = Column(Integer, default=4)
     sort_order = Column(Integer, default=0)
+    # Optional live-stats widget (Homepage-style). Empty widget_type → plain bookmark.
+    widget_type = Column(String(40), nullable=True)        # provider key, e.g. "sonarr"
+    widget_url = Column(String(2048), nullable=True)       # API base URL; falls back to `url`
+    widget_config = Column(Text, nullable=True)            # JSON: credentials + per-provider options
     created_at = Column(String(19), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
 
     group = relationship("BookmarkGroup", back_populates="bookmarks")
@@ -423,6 +427,33 @@ class Bookmark(Base):
     def icon_is_image(self) -> bool:
         """True when `icon` should render as an <img> rather than emoji/text."""
         return (self.icon or "").strip().startswith(("http://", "https://", "/"))
+
+    @property
+    def has_widget(self) -> bool:
+        """True when this bookmark renders a live-stats widget."""
+        return bool((self.widget_type or "").strip())
+
+    @property
+    def widget_config_dict(self) -> dict:
+        """Parsed widget_config JSON; {} when unset or malformed."""
+        import json
+        try:
+            data = json.loads(self.widget_config or "{}")
+            return data if isinstance(data, dict) else {}
+        except (ValueError, TypeError):
+            return {}
+
+    @property
+    def widget_api_url(self) -> str:
+        """The base URL used for widget API calls (widget_url, else the bookmark url)."""
+        return (self.widget_url or "").strip() or self.url
+
+    @property
+    def widget_config_safe(self) -> dict:
+        """widget_config with secret values stripped — safe to embed in page HTML so
+        the edit modal can repopulate non-secret fields (entities, slug, username...)."""
+        secrets = {"api_key", "password", "token", "secret"}
+        return {k: v for k, v in self.widget_config_dict.items() if k not in secrets}
 
     @property
     def letter(self) -> str:
