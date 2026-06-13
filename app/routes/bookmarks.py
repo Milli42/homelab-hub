@@ -148,6 +148,13 @@ def _build_widget_config(form, widget_type: str, existing: dict) -> dict:
             cfg[name] = val if val else str(existing.get(name, ""))  # blank → keep current
         else:
             cfg[name] = str(form.get(f"w_{name}") or "").strip()
+    # Stat picker (Homepage-style): which stats the user ticked. Stored only when
+    # the provider offers a catalog and at least one box is checked; an empty
+    # selection falls back to the provider's defaults at render time.
+    if provider.stats:
+        chosen = [s.strip() for s in form.getlist("w_stats") if s.strip()]
+        if chosen:
+            cfg["stats"] = chosen
     # Every provider makes HTTP calls, so the TLS toggle is global to the form.
     cfg["verify_tls"] = not bool(form.get("w_ignore_tls"))
     return cfg
