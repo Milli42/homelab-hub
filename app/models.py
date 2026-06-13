@@ -408,6 +408,8 @@ class Bookmark(Base):
     # Smart icon: an emoji, or an image URL (http(s):// or root-relative /path).
     # Empty → a lettered badge is rendered from the title.
     icon = Column(String(512), default="")
+    # Tile width as a span of a 12-column grid: 2=⅙ 3=¼ 4=⅓ 6=½ 8=⅔ 12=full row.
+    width = Column(Integer, default=4)
     sort_order = Column(Integer, default=0)
     created_at = Column(String(19), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
 

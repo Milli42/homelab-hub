@@ -42,9 +42,9 @@
         </button>
         <button type="button" class="btn btn-ghost btn-xs bm-sec-add" onclick="openBookmarkModal({{ g.id }})">+ Add</button>
     </div>
-    <div class="bm-grid" data-group-id="{{ g.id }}"{% if g.columns %} data-cols style="--cols: {{ g.columns }}"{% endif %}>
+    <div class="bm-grid" data-group-id="{{ g.id }}">
         {% for b in g.bookmarks %}
-        <div class="bm-tile animate-pop" data-id="{{ b.id }}" style="--i:{{ loop.index0 }}">
+        <div class="bm-tile animate-pop" data-id="{{ b.id }}" style="--i:{{ loop.index0 }}; --span: {{ b.width }}">
             <a class="bm-hit" href="{{ b.url }}" target="_blank" rel="noopener noreferrer"></a>
             <span class="bm-icon">
                 {% if b.icon_is_image %}<img class="bm-img" src="{{ b.icon }}" alt="" loading="lazy">
@@ -59,7 +59,7 @@
                 <button type="button" class="bm-act" title="Edit"
                         data-id="{{ b.id }}" data-group="{{ b.group_id }}" data-title="{{ b.title }}"
                         data-url="{{ b.url }}" data-subtitle="{{ b.subtitle or '' }}" data-icon="{{ b.icon or '' }}"
-                        onclick="editBookmark(this)">✎</button>
+                        data-width="{{ b.width }}" onclick="editBookmark(this)">✎</button>
                 <form action="/api/bookmarks/{{ b.id }}" method="POST"
                       onsubmit="return confirm('Remove “{{ b.title }}”?')">
                     <input type="hidden" name="_method" value="DELETE">
@@ -94,10 +94,9 @@
             <div class="flex items-center gap-3 p-3 rounded-xl border border-[#232838] bg-[#10131a]" style="border-left: 3px solid {{ g.color }}">
                 <span class="text-xl w-8 text-center">{{ g.icon }}</span>
                 <span class="flex-1 font-medium text-sm">{{ g.name }}</span>
-                <span class="text-xs text-overlay0" title="Tiles per row">{{ g.columns or 'auto' }}/row</span>
                 <span class="w-4 h-4 rounded-full flex-shrink-0 ring-2 ring-white/10" style="background-color: {{ g.color }};"></span>
                 <button type="button"
-                        data-id="{{ g.id }}" data-name="{{ g.name }}" data-color="{{ g.color }}" data-icon="{{ g.icon }}" data-columns="{{ g.columns }}"
+                        data-id="{{ g.id }}" data-name="{{ g.name }}" data-color="{{ g.color }}" data-icon="{{ g.icon }}"
                         onclick="editBmGroup(this)" class="btn btn-ghost btn-xs">Edit</button>
                 <form action="/api/bookmark-groups/{{ g.id }}" method="POST" class="inline"
                       onsubmit="return confirm('Delete category “{{ g.name }}” and its {{ g.bookmarks|length }} bookmark{{ 's' if g.bookmarks|length != 1 }}?')">
@@ -124,24 +123,13 @@
                 </div>
                 <div class="emoji-grid mt-2" data-emoji-picker data-target="sc-icon-input" data-preview="sc-icon-preview"></div>
             </div>
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="field-label">Color</label>
-                    <div class="flex gap-2">
-                        <input type="color" value="#60a5fa" class="w-12 h-11 rounded-lg cursor-pointer border-0 p-0 bg-transparent"
-                               oninput="this.nextElementSibling.value=this.value">
-                        <input type="text" name="color" value="#60a5fa" class="input flex-1 font-mono text-sm"
-                               pattern="^#[0-9a-fA-F]{6}$" oninput="this.previousElementSibling.value=this.value">
-                    </div>
-                </div>
-                <div>
-                    <label class="field-label">Per row</label>
-                    <select name="columns" class="input">
-                        <option value="0">Auto</option>
-                        <option value="2">2</option><option value="3">3</option>
-                        <option value="4">4</option><option value="5">5</option>
-                        <option value="6">6</option><option value="8">8</option>
-                    </select>
+            <div>
+                <label class="field-label">Color</label>
+                <div class="flex gap-2">
+                    <input type="color" value="#60a5fa" class="w-12 h-11 rounded-lg cursor-pointer border-0 p-0 bg-transparent"
+                           oninput="this.nextElementSibling.value=this.value">
+                    <input type="text" name="color" value="#60a5fa" class="input flex-1 font-mono text-sm"
+                           pattern="^#[0-9a-fA-F]{6}$" oninput="this.previousElementSibling.value=this.value">
                 </div>
             </div>
             <button type="submit" class="btn btn-primary">Add Category</button>
@@ -167,24 +155,13 @@
                 </div>
                 <div class="emoji-grid mt-2" data-emoji-picker data-target="mc-icon-input" data-preview="mc-icon-preview"></div>
             </div>
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="field-label">Color</label>
-                    <div class="flex gap-2">
-                        <input type="color" value="#60a5fa" class="w-12 h-11 rounded-lg cursor-pointer border-0 p-0 bg-transparent"
-                               oninput="this.nextElementSibling.value=this.value">
-                        <input type="text" name="color" value="#60a5fa" class="input flex-1 font-mono text-sm"
-                               pattern="^#[0-9a-fA-F]{6}$" oninput="this.previousElementSibling.value=this.value">
-                    </div>
-                </div>
-                <div>
-                    <label class="field-label">Per row</label>
-                    <select name="columns" class="input">
-                        <option value="0">Auto</option>
-                        <option value="2">2</option><option value="3">3</option>
-                        <option value="4">4</option><option value="5">5</option>
-                        <option value="6">6</option><option value="8">8</option>
-                    </select>
+            <div>
+                <label class="field-label">Color</label>
+                <div class="flex gap-2">
+                    <input type="color" value="#60a5fa" class="w-12 h-11 rounded-lg cursor-pointer border-0 p-0 bg-transparent"
+                           oninput="this.nextElementSibling.value=this.value">
+                    <input type="text" name="color" value="#60a5fa" class="input flex-1 font-mono text-sm"
+                           pattern="^#[0-9a-fA-F]{6}$" oninput="this.previousElementSibling.value=this.value">
                 </div>
             </div>
             <div class="flex gap-2 pt-1">
@@ -217,10 +194,15 @@
     .bm-sec-name { font-size: 1.05rem; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .bm-section.collapsed .bm-grid, .bm-section.collapsed .bm-empty { display: none; }
 
-    /* ── Tile grid ── */
-    .bm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 0.6rem; }
-    @media (min-width: 640px) {
-        .bm-grid[data-cols] { grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); }
+    /* ── Tile grid ──
+       Mobile: simple auto-fill so tiles never get too small.
+       ≥768px: a 12-track grid where each tile spans --span twelfths
+       (2=⅙, 3=¼, 4=⅓, 6=½, 8=⅔, 12=full). Default flow (not dense) so
+       drag-arranged order is preserved. */
+    .bm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.6rem; }
+    @media (min-width: 768px) {
+        .bm-grid { grid-template-columns: repeat(12, 1fr); }
+        .bm-tile { grid-column: span var(--span, 4); }
     }
     .bm-tile {
         position: relative; display: flex; align-items: center; gap: 0.7rem;
@@ -317,13 +299,6 @@
 
     const bmEsc = s => String(s ?? '').replace(/[&<>"']/g, c =>
         ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-
-    const COLS_OPTS = [0,2,3,4,5,6,8];
-    function colsSelect(name, selected) {
-        return `<select name="${name}" class="input">` +
-            COLS_OPTS.map(n => `<option value="${n}"${Number(selected)===n?' selected':''}>${n===0?'Auto':n}</option>`).join('') +
-            `</select>`;
-    }
 
     // ── Emoji picker (expanded category icon set) ──
     const BM_EMOJIS = [
@@ -446,9 +421,22 @@
                 <h3 class="text-lg font-bold mb-5">${editing ? 'Edit' : 'New'} Bookmark</h3>
                 <form action="${action}" method="POST" class="space-y-4">
                     ${editing ? '<input type="hidden" name="_method" value="PUT">' : ''}
-                    <div>
-                        <label class="field-label">Category</label>
-                        <select name="group_id" class="input" required>${opts}</select>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="field-label">Category</label>
+                            <select name="group_id" class="input" required>${opts}</select>
+                        </div>
+                        <div>
+                            <label class="field-label">Width</label>
+                            <select name="width" class="input">
+                                <option value="12">Full row</option>
+                                <option value="8">⅔ · two-thirds</option>
+                                <option value="6">½ · 2 per row</option>
+                                <option value="4" selected>⅓ · 3 per row</option>
+                                <option value="3">¼ · 4 per row</option>
+                                <option value="2">⅙ · 6 per row</option>
+                            </select>
+                        </div>
                     </div>
                     <div>
                         <label class="field-label">Title</label>
@@ -486,6 +474,7 @@
             form.querySelector('[name="url"]').value = data.url || '';
             form.querySelector('[name="subtitle"]').value = data.subtitle || '';
             form.querySelector('[name="icon"]').value = data.icon || '';
+            form.querySelector('[name="width"]').value = data.width || 4;
         }
         buildEmojiPicker(overlay.querySelector('[data-emoji-picker]'));
         bmRenderIconPreview();
@@ -511,7 +500,7 @@
         const d = btn.dataset;
         openBookmarkModal(null, {
             id: d.id, group: d.group, title: d.title,
-            url: d.url, subtitle: d.subtitle, icon: d.icon,
+            url: d.url, subtitle: d.subtitle, icon: d.icon, width: d.width,
         });
     }
 
@@ -539,15 +528,9 @@
                         </div>
                         <div class="emoji-grid mt-2" data-emoji-picker data-target="eg-icon" data-preview="eg-icon-preview"></div>
                     </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="field-label">Color</label>
-                            <input type="color" name="color" id="eg-color" class="w-full h-11 rounded-lg cursor-pointer border-0 p-0 bg-transparent">
-                        </div>
-                        <div>
-                            <label class="field-label">Per row</label>
-                            ${colsSelect('columns', d.columns)}
-                        </div>
+                    <div>
+                        <label class="field-label">Color</label>
+                        <input type="color" name="color" id="eg-color" class="w-full h-11 rounded-lg cursor-pointer border-0 p-0 bg-transparent">
                     </div>
                     <div class="flex gap-2 pt-2">
                         <button type="submit" class="btn btn-primary flex-1">Save</button>
