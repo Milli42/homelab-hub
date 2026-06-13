@@ -2,25 +2,420 @@
 {% block title %}Bookmarks · Homelab Hub{% endblock %}
 {% set active_tab = 'bookmarks' %}
 
+{% block mobile_add %}
+{% if groups %}
+<button class="fab-add" onclick="openBookmarkModal()" aria-label="New Bookmark"></button>
+{% else %}
+<button class="fab-add" onclick="document.getElementById('new-bmgroup-modal').classList.remove('hidden')" aria-label="New Category"></button>
+{% endif %}
+{% endblock %}
+
 {% block content %}
+<div class="flex items-center justify-between gap-4 mb-6 animate-in" style="--i:0">
+    <div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-text">Bookmarks</h1>
+        {% if total %}<p class="text-sm text-overlay0 mt-0.5">{{ total }} link{{ 's' if total != 1 }} across {{ groups|length }} categor{{ 'ies' if groups|length != 1 else 'y' }}</p>{% endif %}
+    </div>
+    <div class="flex items-center gap-2">
+        {% if groups %}
+        <button class="btn btn-primary btn-sm hidden sm:inline-flex" onclick="openBookmarkModal()">+ New Bookmark</button>
+        {% endif %}
+        <button class="btn btn-ghost btn-sm hidden sm:inline-flex" onclick="document.getElementById('new-bmgroup-modal').classList.remove('hidden')">+ Category</button>
+        <button class="gear-btn" onclick="const s=document.getElementById('bookmarks-settings'); s.setAttribute('open',''); s.scrollIntoView({behavior:'smooth'})" title="Bookmark settings" aria-label="Bookmark settings">⚙️</button>
+    </div>
+</div>
+
+{% if groups %}
+{% for g in groups %}
+<section class="bm-section animate-in" style="--i:{{ loop.index0 + 1 }}">
+    <div class="bm-sec-head">
+        <span class="bm-sec-icon" style="--c: {{ g.color }}">{{ g.icon }}</span>
+        <h2 class="bm-sec-name">{{ g.name }}</h2>
+        <span class="count-badge">{{ g.bookmarks|length }}</span>
+        <button type="button" class="btn btn-ghost btn-xs bm-sec-add" onclick="openBookmarkModal({{ g.id }})">+ Add</button>
+    </div>
+    {% if g.bookmarks %}
+    <div class="bm-grid">
+        {% for b in g.bookmarks %}
+        <div class="bm-tile animate-pop" style="--c: {{ g.color }}; --i:{{ loop.index0 }}">
+            <a class="bm-hit" href="{{ b.url }}" target="_blank" rel="noopener noreferrer"></a>
+            <span class="bm-icon" style="--c: {{ g.color }}">
+                {% if b.icon_is_image %}<img class="bm-img" src="{{ b.icon }}" alt="" loading="lazy">
+                {% elif b.icon %}{{ b.icon }}
+                {% else %}<span class="bm-letter">{{ b.letter }}</span>{% endif %}
+            </span>
+            <span class="bm-text">
+                <span class="bm-title">{{ b.title }}</span>
+                {% if b.subtitle %}<span class="bm-sub">{{ b.subtitle }}</span>{% endif %}
+            </span>
+            <div class="bm-actions">
+                <button type="button" class="bm-act" title="Edit"
+                        data-id="{{ b.id }}" data-group="{{ b.group_id }}" data-title="{{ b.title }}"
+                        data-url="{{ b.url }}" data-subtitle="{{ b.subtitle or '' }}" data-icon="{{ b.icon or '' }}"
+                        onclick="editBookmark(this)">✎</button>
+                <form action="/api/bookmarks/{{ b.id }}" method="POST"
+                      onsubmit="return confirm('Remove “{{ b.title }}”?')">
+                    <input type="hidden" name="_method" value="DELETE">
+                    <button type="submit" class="bm-act bm-act-danger" title="Delete">×</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <button type="button" class="bm-empty" onclick="openBookmarkModal({{ g.id }})">+ Add your first link to {{ g.name }}</button>
+    {% endif %}
+</section>
+{% endfor %}
+{% else %}
+<div class="text-center py-16 animate-in">
+    <div class="text-6xl mb-5 opacity-25">🔖</div>
+    <h2 class="text-xl font-bold text-subtext0 mb-2">No bookmarks yet</h2>
+    <p class="text-overlay0 mb-6">Create a category (like <em>Media</em> or <em>Network</em>), then add your apps and sites under it.</p>
+    <button class="btn btn-primary text-base px-6 py-3" onclick="document.getElementById('new-bmgroup-modal').classList.remove('hidden')">✨ Create Your First Category</button>
+</div>
+{% endif %}
+
+<!-- ═══ IN-PAGE SETTINGS (gear) ═══ -->
+<details class="settings-panel mt-10 scroll-mt-20" id="bookmarks-settings">
+    <summary class="section-title !mb-0 py-2"><span class="chev">▶</span> ⚙️ Bookmark Settings</summary>
+    <div class="settings-body mt-3 max-w-lg">
+    <div class="card p-6">
+        <h2 class="text-lg font-bold mb-4">🏷️ Categories</h2>
+        <div class="space-y-2 mb-8">
+            {% for g in groups %}
+            <div class="flex items-center gap-3 p-3 rounded-xl border border-[#232838] bg-[#10131a]" style="border-left: 3px solid {{ g.color }}">
+                <span class="text-xl w-8 text-center">{{ g.icon }}</span>
+                <span class="flex-1 font-medium text-sm">{{ g.name }}</span>
+                <span class="text-xs text-overlay0">{{ g.bookmarks|length }}</span>
+                <span class="w-4 h-4 rounded-full flex-shrink-0 ring-2 ring-white/10" style="background-color: {{ g.color }};"></span>
+                <button type="button"
+                        data-id="{{ g.id }}" data-name="{{ g.name }}" data-color="{{ g.color }}" data-icon="{{ g.icon }}"
+                        onclick="editBmGroup(this)" class="btn btn-ghost btn-xs">Edit</button>
+                <form action="/api/bookmark-groups/{{ g.id }}" method="POST" class="inline"
+                      onsubmit="return confirm('Delete category “{{ g.name }}” and its {{ g.bookmarks|length }} bookmark{{ 's' if g.bookmarks|length != 1 }}?')">
+                    <input type="hidden" name="_method" value="DELETE">
+                    <button type="submit" class="btn btn-danger btn-xs">×</button>
+                </form>
+            </div>
+            {% else %}
+            <div class="text-sm text-overlay0">No categories yet.</div>
+            {% endfor %}
+        </div>
+
+        <form action="/api/bookmark-groups" method="POST" class="space-y-4 pt-4 border-t border-white/5">
+            <h2 class="text-lg font-bold">Add Category</h2>
+            <div>
+                <label class="field-label">Name</label>
+                <input type="text" name="name" class="input" placeholder="e.g. Media" required>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="field-label">Icon</label>
+                    <div class="flex items-center gap-2">
+                        <span id="sc-icon-preview" class="text-2xl w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 border border-[#232838] bg-[#10131a]">🔖</span>
+                        <input type="text" name="icon" class="input flex-1" value="🔖" maxlength="10" id="sc-icon-input" onfocus="this.select()" oninput="document.getElementById('sc-icon-preview').textContent=this.value">
+                    </div>
+                    <div class="emoji-grid mt-2" data-emoji-picker data-target="sc-icon-input" data-preview="sc-icon-preview"></div>
+                </div>
+                <div>
+                    <label class="field-label">Color</label>
+                    <div class="flex gap-2">
+                        <input type="color" value="#60a5fa" class="w-12 h-11 rounded-lg cursor-pointer border-0 p-0 bg-transparent"
+                               oninput="this.nextElementSibling.value=this.value">
+                        <input type="text" name="color" value="#60a5fa" class="input flex-1 font-mono text-sm"
+                               pattern="^#[0-9a-fA-F]{6}$" oninput="this.previousElementSibling.value=this.value">
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Add Category</button>
+        </form>
+    </div>
+    </div>
+</details>
+
+<!-- ═══ New category modal ═══ -->
+<div id="new-bmgroup-modal" class="modal-overlay hidden" onclick="if (event.target === this) this.classList.add('hidden')">
+    <div class="modal-panel">
+        <h3 class="text-lg font-bold mb-5">New Category</h3>
+        <form action="/api/bookmark-groups" method="POST" class="space-y-4">
+            <div>
+                <label class="field-label">Name</label>
+                <input type="text" name="name" class="input" placeholder="e.g. Network" required autofocus>
+            </div>
+            <div>
+                <label class="field-label">Icon</label>
+                <div class="flex items-center gap-2">
+                    <span id="mc-icon-preview" class="text-2xl w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 border border-[#232838] bg-[#10131a]">🔖</span>
+                    <input type="text" name="icon" class="input flex-1" value="🔖" maxlength="10" id="mc-icon-input" onfocus="this.select()" oninput="document.getElementById('mc-icon-preview').textContent=this.value">
+                </div>
+                <div class="emoji-grid mt-2" data-emoji-picker data-target="mc-icon-input" data-preview="mc-icon-preview"></div>
+            </div>
+            <div>
+                <label class="field-label">Color</label>
+                <div class="flex gap-2">
+                    <input type="color" value="#60a5fa" class="w-12 h-11 rounded-lg cursor-pointer border-0 p-0 bg-transparent"
+                           oninput="this.nextElementSibling.value=this.value">
+                    <input type="text" name="color" value="#60a5fa" class="input flex-1 font-mono text-sm"
+                           pattern="^#[0-9a-fA-F]{6}$" oninput="this.previousElementSibling.value=this.value">
+                </div>
+            </div>
+            <div class="flex gap-2 pt-1">
+                <button type="submit" class="btn btn-primary flex-1">Create Category</button>
+                <button type="button" class="btn btn-ghost" onclick="document.getElementById('new-bmgroup-modal').classList.add('hidden')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <style>
-    /* Full-bleed iframe tab: cancel main's max-width/padding */
-    main:has(#homepage-frame) { max-width: none; padding: 0 !important; }
-    #homepage-frame {
-        display: block;
-        width: 100%;
-        border: none;
-        background: #0b0d12;
-        /* viewport minus sticky header */
-        height: calc(100vh - 57px);
+    /* ── Sections ── */
+    .bm-section { margin-bottom: 1.75rem; }
+    .bm-sec-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.85rem; }
+    .bm-sec-icon {
+        width: 1.95rem; height: 1.95rem; border-radius: 0.55rem; flex-shrink: 0;
+        display: inline-flex; align-items: center; justify-content: center; font-size: 1.05rem;
+        background: color-mix(in srgb, var(--c) 16%, transparent);
+        border: 1px solid color-mix(in srgb, var(--c) 30%, transparent);
     }
-    @media (max-width: 639px) {
-        #homepage-frame {
-            height: calc(100vh - 49px - var(--nav-h) - env(safe-area-inset-bottom));
-        }
-        main:has(#homepage-frame) { padding-bottom: 0 !important; }
+    .bm-sec-name { font-size: 1.05rem; font-weight: 800; }
+    .bm-sec-add { margin-left: auto; }
+
+    /* ── Tile grid ── */
+    .bm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.6rem; }
+    .bm-tile {
+        position: relative; display: flex; align-items: center; gap: 0.7rem;
+        padding: 0.7rem 0.8rem; border-radius: 0.8rem; overflow: hidden;
+        background: var(--c-card); border: 1px solid var(--c-border);
+        transition: transform 0.25s var(--spring), border-color 0.2s, background 0.2s;
     }
+    .bm-tile:hover {
+        transform: translateY(-2px);
+        border-color: color-mix(in srgb, var(--c) 50%, var(--c-border));
+        background: var(--c-card-raised);
+    }
+    .bm-hit { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
+    .bm-icon {
+        width: 2.5rem; height: 2.5rem; flex-shrink: 0; border-radius: 0.6rem;
+        display: flex; align-items: center; justify-content: center; font-size: 1.35rem;
+        overflow: hidden; line-height: 1;
+        background: color-mix(in srgb, var(--c) 16%, transparent);
+        border: 1px solid color-mix(in srgb, var(--c) 28%, transparent);
+    }
+    .bm-img { width: 100%; height: 100%; object-fit: contain; padding: 0.18rem; }
+    .bm-letter { font-weight: 800; color: var(--c); font-size: 1.15rem; }
+    .bm-text { min-width: 0; flex: 1; display: flex; flex-direction: column; line-height: 1.25; }
+    .bm-title { font-weight: 700; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bm-sub { font-size: 0.72rem; color: #76819a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+
+    .bm-actions {
+        position: absolute; top: 0.35rem; right: 0.35rem; z-index: 2;
+        display: flex; gap: 0.2rem;
+        opacity: 0; transform: translateY(-3px);
+        transition: opacity 0.18s, transform 0.18s;
+    }
+    .bm-tile:hover .bm-actions, .bm-tile:focus-within .bm-actions { opacity: 1; transform: none; }
+    @media (hover: none) { .bm-actions { opacity: 0.85; transform: none; } }
+    .bm-act {
+        width: 1.55rem; height: 1.55rem; border-radius: 0.4rem;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 0.8rem; font-weight: 700; line-height: 1; cursor: pointer;
+        background: #222838; border: 1px solid var(--c-border); color: #aab3c8;
+        transition: background 0.15s, color 0.15s;
+    }
+    .bm-act:hover { background: #2f3750; color: #e8ebf4; }
+    .bm-act-danger:hover { background: rgba(255,107,138,0.2); color: var(--c-red); }
+
+    .bm-empty {
+        width: 100%; text-align: center; padding: 1.1rem;
+        border: 1px dashed var(--c-border); border-radius: 0.8rem;
+        background: transparent; color: #76819a; cursor: pointer;
+        font-size: 0.85rem; font-weight: 600;
+        transition: border-color 0.2s, color 0.2s, background 0.2s;
+    }
+    .bm-empty:hover { border-color: #3a425c; color: #aab3c8; background: rgba(255,255,255,0.02); }
+
+    /* ── Emoji picker (shared look with Notes) ── */
+    .emoji-grid {
+        display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px;
+        max-height: 9.5rem; overflow-y: auto; padding: 0.35rem;
+        border: 1px solid var(--c-border); border-radius: 0.65rem; background: #10131a;
+    }
+    .emoji-grid button {
+        aspect-ratio: 1; font-size: 1.15rem; border-radius: 0.5rem;
+        display: flex; align-items: center; justify-content: center;
+        background: transparent; border: none; cursor: pointer;
+        transition: background 0.15s, transform 0.15s;
+    }
+    .emoji-grid button:hover { background: rgba(255,255,255,0.08); transform: scale(1.1); }
+    .emoji-grid button.sel { background: rgba(96,165,250,0.22); box-shadow: 0 0 0 1px #60a5fa inset; }
+    @media (min-width: 640px) { .emoji-grid { grid-template-columns: repeat(10, 1fr); } }
 </style>
-<iframe id="homepage-frame" src="{{ homepage_url }}" title="Homepage Dashboard"
-        loading="eager" referrerpolicy="no-referrer"></iframe>
+
+<script>
+    const BM_GROUPS = {{ groups_json|safe }};
+
+    const bmEsc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+        ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+    // ── Emoji picker (same master list as Notes) ──
+    const BM_EMOJIS = [
+        '🔖','📌','⭐','🏷️','🌐','🔗','🏠','🏡','📡','📶','🛰️','🖥️','💻','⌨️','🖱️','🖨️',
+        '🎬','📺','🎞️','🍿','🎵','🎧','🎮','📚','📖','📰','🗞️',
+        '☁️','🗄️','🗃️','💾','💿','📀','🧮','🔭','🔬','🧪',
+        '🔒','🔓','🔐','🔑','🛡️','🚦','🚥','⚙️','🛠️','🧰',
+        '📷','📸','📹','🎥','🖼️','🎨',
+        '📊','📈','📉','💰','💳','🧾','🛒','📦','📮',
+        '🌡️','💡','🔌','🔋','📁','📂','✅','⚡','❤️','🔥','🚀','🤖','🐳','🐧','🦊','🦝','🐾','🌍','🧠','⏰'
+    ];
+    function buildEmojiPicker(container) {
+        const input = document.getElementById(container.dataset.target);
+        const preview = container.dataset.preview ? document.getElementById(container.dataset.preview) : null;
+        if (!input) return;
+        container.innerHTML = '';
+        const mark = () => container.querySelectorAll('button').forEach(b =>
+            b.classList.toggle('sel', b.textContent === input.value));
+        BM_EMOJIS.forEach(em => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = em;
+            b.onclick = () => { input.value = em; if (preview) preview.textContent = em; mark();
+                                if (input.id === 'bm-icon-input') bmRenderIconPreview(); };
+            container.appendChild(b);
+        });
+        mark();
+    }
+    document.querySelectorAll('[data-emoji-picker]').forEach(buildEmojiPicker);
+
+    // ── Bookmark icon preview (smart: image URL vs emoji vs letter) ──
+    function bmRenderIconPreview() {
+        const input = document.getElementById('bm-icon-input');
+        const prev = document.getElementById('bm-icon-preview');
+        if (!input || !prev) return;
+        const v = input.value.trim();
+        if (/^(https?:\/\/|\/)/.test(v)) {
+            prev.innerHTML = `<img class="bm-img" src="${bmEsc(v)}" alt="">`;
+        } else if (v) {
+            prev.textContent = v;
+        } else {
+            const t = input.closest('form').querySelector('[name="title"]');
+            const letter = (((t && t.value.trim()[0]) || '?')).toUpperCase();
+            prev.innerHTML = `<span class="bm-letter">${bmEsc(letter)}</span>`;
+        }
+    }
+
+    // ── New / Edit bookmark modal ──
+    function openBookmarkModal(groupId, data) {
+        data = data || null;
+        const editing = !!(data && data.id);
+        if (!BM_GROUPS.length) {
+            document.getElementById('new-bmgroup-modal').classList.remove('hidden');
+            return;
+        }
+        const action = editing ? `/api/bookmarks/${data.id}` : '/api/bookmarks';
+        const opts = BM_GROUPS.map(g =>
+            `<option value="${g.id}">${bmEsc(g.icon)} ${bmEsc(g.name)}</option>`).join('');
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+        overlay.innerHTML = `
+            <div class="modal-panel" onclick="event.stopPropagation()">
+                <h3 class="text-lg font-bold mb-5">${editing ? 'Edit' : 'New'} Bookmark</h3>
+                <form action="${action}" method="POST" class="space-y-4">
+                    ${editing ? '<input type="hidden" name="_method" value="PUT">' : ''}
+                    <div>
+                        <label class="field-label">Category</label>
+                        <select name="group_id" class="input" required>${opts}</select>
+                    </div>
+                    <div>
+                        <label class="field-label">Title</label>
+                        <input type="text" name="title" class="input" placeholder="e.g. Jellyfin" required oninput="bmRenderIconPreview()">
+                    </div>
+                    <div>
+                        <label class="field-label">URL</label>
+                        <input type="url" name="url" class="input" placeholder="https://jellyfin.mjaranch.com" required>
+                    </div>
+                    <div>
+                        <label class="field-label">Subtitle <span class="text-overlay0 font-normal normal-case">(optional)</span></label>
+                        <input type="text" name="subtitle" class="input" placeholder="e.g. Media server">
+                    </div>
+                    <div>
+                        <label class="field-label">Icon <span class="text-overlay0 font-normal normal-case">(emoji or image URL)</span></label>
+                        <div class="flex items-center gap-2">
+                            <span id="bm-icon-preview" class="bm-icon" style="--c:#60a5fa"></span>
+                            <input type="text" name="icon" id="bm-icon-input" class="input flex-1" placeholder="🎬 or https://…/jellyfin.png" oninput="bmRenderIconPreview()">
+                        </div>
+                        <div class="emoji-grid mt-2" data-emoji-picker data-target="bm-icon-input"></div>
+                        <p class="text-xs text-overlay0 mt-2">Tip: paste a logo URL (e.g. from <code>dashboard-icons</code>) for a crisp app logo. Leave blank for a lettered badge.</p>
+                    </div>
+                    <div class="flex gap-2 pt-1">
+                        <button type="submit" class="btn btn-primary flex-1">${editing ? 'Save' : 'Add Bookmark'}</button>
+                        <button type="button" class="btn btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+                    </div>
+                </form>
+            </div>`;
+        document.body.appendChild(overlay);
+        const form = overlay.querySelector('form');
+        if (groupId) form.querySelector('[name="group_id"]').value = groupId;
+        if (editing) {
+            form.querySelector('[name="group_id"]').value = data.group;
+            form.querySelector('[name="title"]').value = data.title || '';
+            form.querySelector('[name="url"]').value = data.url || '';
+            form.querySelector('[name="subtitle"]').value = data.subtitle || '';
+            form.querySelector('[name="icon"]').value = data.icon || '';
+        }
+        buildEmojiPicker(overlay.querySelector('[data-emoji-picker]'));
+        bmRenderIconPreview();
+    }
+
+    function editBookmark(btn) {
+        const d = btn.dataset;
+        openBookmarkModal(null, {
+            id: d.id, group: d.group, title: d.title,
+            url: d.url, subtitle: d.subtitle, icon: d.icon,
+        });
+    }
+
+    // ── Edit category modal ──
+    function editBmGroup(btn) {
+        const d = btn.dataset;
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+        overlay.innerHTML = `
+            <div class="modal-panel" onclick="event.stopPropagation()">
+                <h3 class="text-lg font-bold mb-5">Edit Category</h3>
+                <form action="/api/bookmark-groups/${d.id}" method="POST" class="space-y-4">
+                    <input type="hidden" name="_method" value="PUT">
+                    <div>
+                        <label class="field-label">Name</label>
+                        <input type="text" name="name" class="input" required>
+                    </div>
+                    <div>
+                        <label class="field-label">Icon</label>
+                        <div class="flex items-center gap-2">
+                            <span id="eg-icon-preview" class="text-2xl w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 border border-[#232838] bg-[#10131a]"></span>
+                            <input type="text" name="icon" id="eg-icon" class="input flex-1" maxlength="10"
+                                   oninput="document.getElementById('eg-icon-preview').textContent=this.value">
+                        </div>
+                        <div class="emoji-grid mt-2" data-emoji-picker data-target="eg-icon" data-preview="eg-icon-preview"></div>
+                    </div>
+                    <div>
+                        <label class="field-label">Color</label>
+                        <input type="color" name="color" id="eg-color" class="w-full h-11 rounded-lg cursor-pointer border-0 p-0 bg-transparent">
+                    </div>
+                    <div class="flex gap-2 pt-2">
+                        <button type="submit" class="btn btn-primary flex-1">Save</button>
+                        <button type="button" onclick="this.closest('.modal-overlay').remove()" class="btn btn-ghost">Cancel</button>
+                    </div>
+                </form>
+            </div>`;
+        document.body.appendChild(overlay);
+        overlay.querySelector('[name="name"]').value = d.name;
+        overlay.querySelector('#eg-icon').value = d.icon;
+        overlay.querySelector('#eg-icon-preview').textContent = d.icon;
+        overlay.querySelector('#eg-color').value = d.color;
+        buildEmojiPicker(overlay.querySelector('[data-emoji-picker]'));
+    }
+</script>
 {% endblock %}
