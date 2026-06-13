@@ -4,7 +4,7 @@
 
 {% block mobile_add %}
 {% if groups %}
-<button class="fab-add" onclick="openBookmarkModal()" aria-label="New Bookmark"></button>
+<button id="bm-fab" class="fab-add fab-icon" onclick="setEditMode(!document.body.classList.contains('bm-editing'))" aria-label="Edit bookmarks">✎</button>
 {% else %}
 <button class="fab-add" onclick="document.getElementById('new-bmgroup-modal').classList.remove('hidden')" aria-label="New Category"></button>
 {% endif %}
@@ -17,18 +17,21 @@
         {% if total %}<p class="text-sm text-overlay0 mt-0.5">{{ total }} link{{ 's' if total != 1 }} across {{ groups|length }} categor{{ 'ies' if groups|length != 1 else 'y' }}</p>{% endif %}
     </div>
     <div class="flex items-center gap-2">
-        {% if total %}
-        <button id="bm-edit-btn" class="btn btn-ghost btn-sm" onclick="setEditMode(!document.body.classList.contains('bm-editing'))">↕ Arrange</button>
-        {% endif %}
         {% if groups %}
-        <button class="btn btn-primary btn-sm hidden sm:inline-flex" onclick="openBookmarkModal()">+ New Bookmark</button>
+        <button id="bm-edit-btn" class="btn btn-ghost btn-sm hidden sm:inline-flex" onclick="setEditMode(!document.body.classList.contains('bm-editing'))">✎ Edit</button>
         {% endif %}
-        <button class="btn btn-ghost btn-sm hidden sm:inline-flex" onclick="document.getElementById('new-bmgroup-modal').classList.remove('hidden')">+ Category</button>
         <button class="gear-btn" onclick="const s=document.getElementById('bookmarks-settings'); s.setAttribute('open',''); s.scrollIntoView({behavior:'smooth'})" title="Bookmark settings" aria-label="Bookmark settings">⚙️</button>
     </div>
 </div>
 
-<div id="bm-edit-hint" class="bm-edit-hint">↕ Drag bookmarks to reorder, or drag them between categories. Tap <b>Done</b> when finished — your layout saves automatically.</div>
+<div id="bm-edit-hint" class="bm-edit-hint">Drag tiles to rearrange or move them between categories · tap a tile's <b>✎</b> to edit or <b>×</b> to remove · use <b>+</b> to add. Changes save automatically — tap <b>Done</b> when finished.</div>
+
+{% if groups %}
+<div id="bm-edit-toolbar" class="bm-edit-toolbar">
+    <button type="button" class="btn btn-primary btn-sm" onclick="openBookmarkModal()">+ Bookmark</button>
+    <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('new-bmgroup-modal').classList.remove('hidden')">+ Category</button>
+</div>
+{% endif %}
 
 {% if groups %}
 {% for g in groups %}
@@ -229,14 +232,14 @@
     .bm-title { font-weight: 700; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .bm-sub { font-size: 0.72rem; color: #76819a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
 
+    /* Per-tile edit/delete only appear in edit mode — never on hover or by
+       default, so mobile isn't cluttered with constant ✎ / × controls. */
     .bm-actions {
         position: absolute; top: 0.35rem; right: 0.35rem; z-index: 2;
         display: flex; gap: 0.2rem;
-        opacity: 0; transform: translateY(-3px);
+        opacity: 0; transform: translateY(-3px); pointer-events: none;
         transition: opacity 0.18s, transform 0.18s;
     }
-    .bm-tile:hover .bm-actions, .bm-tile:focus-within .bm-actions { opacity: 1; transform: none; }
-    @media (hover: none) { .bm-actions { opacity: 0.85; transform: none; } }
     .bm-act {
         width: 1.55rem; height: 1.55rem; border-radius: 0.4rem;
         display: inline-flex; align-items: center; justify-content: center;
@@ -262,12 +265,16 @@
         background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.3);
         color: #c3cadb; font-size: 0.82rem; font-weight: 600;
     }
+    /* Add controls live in edit mode only. */
+    .bm-edit-toolbar { display: none; gap: 0.5rem; margin-bottom: 1.1rem; }
+    .bm-sec-add { display: none; }
     body.bm-editing .bm-edit-hint { display: block; animation: rise-in 0.3s var(--ease-out); }
+    body.bm-editing .bm-edit-toolbar { display: flex; animation: rise-in 0.3s var(--ease-out); }
+    body.bm-editing .bm-sec-add { display: inline-flex; }
     body.bm-editing .bm-hit { pointer-events: none; }
     body.bm-editing .bm-tile { cursor: grab; }
     body.bm-editing .bm-tile:active { cursor: grabbing; }
-    body.bm-editing .bm-actions { opacity: 1; transform: none; }
-    body.bm-editing .bm-sec-add { display: none; }
+    body.bm-editing .bm-actions { opacity: 1; transform: none; pointer-events: auto; }
     body.bm-editing .bm-grid:empty {
         min-height: 60px; border: 1px dashed var(--c-border); border-radius: 0.8rem;
         display: grid; place-items: center;
@@ -275,6 +282,11 @@
     body.bm-editing .bm-grid:empty::after { content: 'Drop here'; color: #76819a; font-size: 0.8rem; font-weight: 600; }
     .bm-ghost { opacity: 0.35; }
     .bm-drag { box-shadow: 0 14px 36px rgba(0,0,0,0.55); }
+
+    /* FAB showing an emoji glyph (edit/done) rather than the CSS "+" bars. */
+    .fab-add.fab-icon { font-size: 1.4rem; line-height: 1; }
+    .fab-add.fab-icon::before, .fab-add.fab-icon::after { display: none; }
+    body.bm-editing .fab-add.fab-icon { background: var(--c-green, #4ade80); }
 
     /* ── Emoji picker (shared look with Notes) ── */
     .emoji-grid {
@@ -374,9 +386,14 @@
         document.body.classList.toggle('bm-editing', on);
         const btn = document.getElementById('bm-edit-btn');
         if (btn) {
-            btn.textContent = on ? '✓ Done' : '↕ Arrange';
+            btn.textContent = on ? '✓ Done' : '✎ Edit';
             btn.classList.toggle('btn-primary', on);
             btn.classList.toggle('btn-ghost', !on);
+        }
+        const fab = document.getElementById('bm-fab');
+        if (fab) {
+            fab.textContent = on ? '✓' : '✎';
+            fab.setAttribute('aria-label', on ? 'Done editing' : 'Edit bookmarks');
         }
         if (on) {
             // Expand everything so all categories are visible drop targets.
@@ -394,7 +411,7 @@
                     onEnd: persistLayout,
                 }));
             });
-            showToast('Arrange mode — drag to reorder');
+            showToast('Edit mode — add, rearrange, or remove');
         } else {
             bmSortables.forEach(s => s.destroy());
             bmSortables = [];
@@ -430,11 +447,11 @@
                             <label class="field-label">Width</label>
                             <select name="width" class="input">
                                 <option value="12">Full row</option>
-                                <option value="8">⅔ · two-thirds</option>
-                                <option value="6">½ · 2 per row</option>
-                                <option value="4" selected>⅓ · 3 per row</option>
-                                <option value="3">¼ · 4 per row</option>
-                                <option value="2">⅙ · 6 per row</option>
+                                <option value="8">Two-thirds</option>
+                                <option value="6">2 per row</option>
+                                <option value="4" selected>3 per row</option>
+                                <option value="3">4 per row</option>
+                                <option value="2">6 per row</option>
                             </select>
                         </div>
                     </div>
