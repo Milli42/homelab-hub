@@ -27,7 +27,6 @@ ENV IMAGES_DIR=/data/images
 ENV NOTES_DIR=/data/notes
 ENV RECIPES_DIR=/data/recipes
 ENV UPLOADS_DIR=/data/uploads
-ENV HOMEPAGE_URL=https://bookmarks.mjaranch.com
 
 EXPOSE 8000
 
