@@ -7,6 +7,9 @@
 <div class="flex items-center justify-between gap-4 mb-5 animate-in" style="--i:0">
     <h1 class="text-2xl sm:text-3xl font-extrabold text-text">Recipes</h1>
     <div class="flex items-center gap-2">
+        {% if has_any %}
+        <button class="btn btn-ghost btn-sm" onclick="openSlotMachine()" title="Can't decide? Let the machine pick dinner">🎰<span class="hidden sm:inline">&nbsp;Surprise Me</span></button>
+        {% endif %}
         <a href="/recipes/new" class="btn btn-primary btn-sm hidden sm:inline-flex">+ New Recipe</a>
         <button class="gear-btn" onclick="const s=document.getElementById('recipes-settings'); s.setAttribute('open',''); s.scrollIntoView({behavior:'smooth'})" title="Recipe settings" aria-label="Recipe settings">⚙️</button>
     </div>
@@ -151,6 +154,40 @@
         box-shadow: 0 1px 4px rgba(0,0,0,0.4);
         white-space: nowrap;
     }
+
+    /* ── Recipe slot machine ── */
+    .slot-panel { position: relative; overflow: hidden; }
+    #slot-confetti { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+    .slot-frame { position: relative; border: 1px solid var(--c-border); border-radius: 0.9rem; background: #0d1018; overflow: hidden; }
+    .slot-window { height: 228px; overflow: hidden; }
+    .slot-strip { will-change: transform; }
+    .slot-strip.reel-blur { filter: blur(1.5px); }
+    .slot-item {
+        height: 76px; display: flex; align-items: center; gap: 0.75rem;
+        padding: 0 0.9rem; border-left: 3px solid var(--cat, #60a5fa);
+        border-bottom: 1px solid #161b27;
+    }
+    .slot-thumb { width: 52px; height: 52px; border-radius: 0.6rem; object-fit: cover; flex-shrink: 0; }
+    .slot-thumb-ph { display: flex; align-items: center; justify-content: center; font-size: 1.4rem; }
+    .slot-fade { position: absolute; left: 0; right: 0; height: 58px; pointer-events: none; z-index: 1; }
+    .slot-fade-top { top: 0; background: linear-gradient(180deg, rgba(13,16,24,0.95), transparent); }
+    .slot-fade-bottom { bottom: 0; background: linear-gradient(0deg, rgba(13,16,24,0.95), transparent); }
+    .slot-selector {
+        position: absolute; top: 76px; left: 0; right: 0; height: 76px;
+        pointer-events: none; z-index: 2;
+        border-top: 2px solid #60a5fa; border-bottom: 2px solid #60a5fa;
+    }
+    .slot-selector::before, .slot-selector::after {
+        content: ''; position: absolute; top: 50%; transform: translateY(-50%);
+        border: 7px solid transparent;
+    }
+    .slot-selector::before { left: -2px; border-left-color: #60a5fa; }
+    .slot-selector::after { right: -2px; border-right-color: #60a5fa; }
+    .slot-selector.tick { animation: slot-tick 0.12s ease; }
+    @keyframes slot-tick { 50% { box-shadow: 0 0 26px rgba(96,165,250,0.28) inset; } }
+    .slot-winner { margin-top: 1rem; padding: 0.9rem 1rem; border-radius: 0.9rem; border: 1px solid var(--c-border); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn:disabled:active { transform: none; }
 </style>
 
 <script>
@@ -187,6 +224,250 @@ function editRecipeCategory(id, name, color, icon) {
     overlay.querySelector('[name="name"]').value = name;
     overlay.querySelector('[name="icon"]').value = icon;
     overlay.querySelector('[name="color"]').value = color;
+}
+
+/* ── Recipe slot machine ─────────────────────────────────
+   Step 1: pick categories. Step 2: a vertical reel of recipe
+   cards spins, decelerates, and lands on a (pre-picked) winner. */
+const SLOT_ITEM_H = 76;
+let slotData = null, slotSelected = new Set(), slotLastWinner = null, slotSpinning = false;
+
+const slotEsc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+async function openSlotMachine() {
+    try {
+        slotData = await (await fetch('/api/recipes/picker-data')).json();
+    } catch { showToast('Could not load recipes'); return; }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.id = 'slot-overlay';
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeSlot(); });
+    overlay.innerHTML = `
+        <div class="modal-panel slot-panel" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between mb-1">
+                <h3 class="text-lg font-bold">🎰 Recipe Slot Machine</h3>
+                <button type="button" class="btn btn-ghost btn-xs" onclick="closeSlot()" aria-label="Close">✕</button>
+            </div>
+            <div id="slot-step1">
+                <p class="text-sm text-overlay0 mb-4">Choose what's on the menu tonight, then pull the lever.</p>
+                <div class="flex flex-wrap gap-2 mb-3" id="slot-cats"></div>
+                <div class="text-xs font-bold text-overlay0 mb-4" id="slot-count"></div>
+                <button type="button" class="btn btn-primary w-full" id="slot-go" onclick="startSlot()">Pull the lever 🎰</button>
+            </div>
+            <div id="slot-step2" class="hidden">
+                <div class="slot-frame">
+                    <div class="slot-window"><div class="slot-strip" id="slot-strip"></div></div>
+                    <div class="slot-fade slot-fade-top"></div>
+                    <div class="slot-fade slot-fade-bottom"></div>
+                    <div class="slot-selector" id="slot-selector"></div>
+                </div>
+                <div id="slot-result"></div>
+            </div>
+            <canvas id="slot-confetti"></canvas>
+        </div>`;
+    document.body.appendChild(overlay);
+    document.addEventListener('keydown', slotEscKey);
+
+    // One chip per category that actually has recipes (incl. Uncategorized)
+    const cats = new Map();
+    for (const r of slotData) {
+        const key = r.category_id === null ? 'none' : r.category_id;
+        if (!cats.has(key)) cats.set(key, { key, name: r.category_name || 'Uncategorized', icon: r.icon, count: 0 });
+        cats.get(key).count++;
+    }
+    slotSelected = new Set(cats.keys());
+    const wrap = overlay.querySelector('#slot-cats');
+    for (const c of cats.values()) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'chip chip-active';
+        b.innerHTML = `${slotEsc(c.icon)} ${slotEsc(c.name)} <span class="opacity-60">${c.count}</span>`;
+        b.onclick = () => {
+            if (slotSelected.has(c.key)) { slotSelected.delete(c.key); b.classList.remove('chip-active'); }
+            else { slotSelected.add(c.key); b.classList.add('chip-active'); }
+            updateSlotCount();
+        };
+        wrap.appendChild(b);
+    }
+    updateSlotCount();
+}
+
+function closeSlot() {
+    if (slotSpinning) return;
+    const o = document.getElementById('slot-overlay');
+    if (o) o.remove();
+    document.removeEventListener('keydown', slotEscKey);
+}
+function slotEscKey(e) { if (e.key === 'Escape') closeSlot(); }
+
+function slotPool() {
+    return slotData.filter(r => slotSelected.has(r.category_id === null ? 'none' : r.category_id));
+}
+
+function updateSlotCount() {
+    const n = slotPool().length;
+    const el = document.getElementById('slot-count');
+    const go = document.getElementById('slot-go');
+    if (!el) return;
+    if (n === 0) {
+        el.textContent = 'No recipes selected — pick at least one category.';
+    } else if (n === 1) {
+        el.textContent = "Only 1 recipe in the machine — that wouldn't be much of a gamble.";
+    } else {
+        el.textContent = `${n} recipes loaded in the machine`;
+    }
+    go.disabled = n < 2;
+}
+
+function slotItemHTML(r) {
+    const thumb = r.thumb
+        ? `<img class="slot-thumb" src="${slotEsc(r.thumb)}" alt="" loading="lazy">`
+        : `<div class="slot-thumb slot-thumb-ph" style="background: color-mix(in srgb, ${slotEsc(r.color)} 18%, #161a23)">${slotEsc(r.icon)}</div>`;
+    const times = [r.prep_time && `🔪 ${slotEsc(r.prep_time)}`, r.cook_time && `🔥 ${slotEsc(r.cook_time)}`].filter(Boolean).join(' · ');
+    return `<div class="slot-item" style="--cat: ${slotEsc(r.color)}">
+        ${thumb}
+        <div class="min-w-0">
+            <div class="font-extrabold text-sm truncate">${slotEsc(r.title)}</div>
+            <div class="text-xs text-overlay0 truncate">${slotEsc(r.icon)} ${slotEsc(r.category_name || 'Uncategorized')}${times ? ' · ' + times : ''}</div>
+        </div>
+    </div>`;
+}
+
+function slotShuffle(a) {
+    const b = [...a];
+    for (let i = b.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [b[i], b[j]] = [b[j], b[i]];
+    }
+    return b;
+}
+
+function startSlot() {
+    if (slotSpinning) return;
+    const pool = slotPool();
+    if (pool.length < 2) return;
+
+    // Pick the winner up front; the reel just lands on it. No repeat of the last spin.
+    let candidates = pool.filter(r => r.id !== slotLastWinner);
+    if (!candidates.length) candidates = pool;
+    const winner = candidates[Math.floor(Math.random() * candidates.length)];
+    slotLastWinner = winner.id;
+
+    document.getElementById('slot-step1').classList.add('hidden');
+    document.getElementById('slot-step2').classList.remove('hidden');
+    document.getElementById('slot-result').innerHTML = '';
+
+    // Reel sequence: several shuffled passes, winner second-to-last so it
+    // lands in the middle row with one item visible below it.
+    const seq = [];
+    while (seq.length < 28) seq.push(...slotShuffle(pool));
+    if (seq[seq.length - 1].id === winner.id) seq.pop();   // no duplicate next to the winner
+    const above = seq[seq.length - 1];
+    let others = pool.filter(r => r.id !== winner.id && r.id !== above.id);
+    if (!others.length) others = pool.filter(r => r.id !== winner.id);
+    seq.push(winner, others[Math.floor(Math.random() * others.length)]);
+
+    const strip = document.getElementById('slot-strip');
+    strip.innerHTML = seq.map(slotItemHTML).join('');
+
+    const targetIndex = seq.length - 2;
+    const finalY = -(targetIndex - 1) * SLOT_ITEM_H;   // winner in the middle of 3 visible rows
+
+    slotSpinning = true;
+    strip.classList.add('reel-blur');
+    const selector = document.getElementById('slot-selector');
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const dur = reduced ? 200 : 3400;
+    const startT = performance.now();
+    let lastIdx = -1;
+
+    function frame(now) {
+        const t = Math.min((now - startT) / dur, 1);
+        const eased = 1 - Math.pow(1 - t, 4);          // easeOutQuart
+        const y = finalY * eased;
+        strip.style.transform = `translateY(${y}px)`;
+        if (t > 0.65) strip.classList.remove('reel-blur');
+        const idx = Math.round(-y / SLOT_ITEM_H);
+        if (idx !== lastIdx && !reduced) {
+            lastIdx = idx;
+            selector.classList.remove('tick'); void selector.offsetWidth; selector.classList.add('tick');
+        }
+        if (t < 1) requestAnimationFrame(frame);
+        else slotLand(strip, finalY, winner, reduced);
+    }
+    requestAnimationFrame(frame);
+}
+
+function slotLand(strip, finalY, winner, reduced) {
+    if (!reduced) {
+        strip.animate(
+            [{ transform: `translateY(${finalY}px)` },
+             { transform: `translateY(${finalY - 10}px)` },
+             { transform: `translateY(${finalY}px)` }],
+            { duration: 240, easing: 'ease-out' });
+    }
+    setTimeout(() => {
+        slotSpinning = false;
+        slotConfetti(winner.color);
+        const times = [winner.prep_time && `🔪 ${slotEsc(winner.prep_time)}`, winner.cook_time && `🔥 ${slotEsc(winner.cook_time)}`].filter(Boolean).join(' &nbsp; ');
+        document.getElementById('slot-result').innerHTML = `
+            <div class="slot-winner animate-pop" style="border-color: color-mix(in srgb, ${slotEsc(winner.color)} 45%, transparent); background: linear-gradient(135deg, color-mix(in srgb, ${slotEsc(winner.color)} 12%, transparent), var(--c-card) 60%)">
+                <div class="text-[0.66rem] font-extrabold uppercase tracking-widest text-overlay0 mb-1">🎉 Winner winner</div>
+                <div class="text-lg font-extrabold leading-snug">${slotEsc(winner.icon)} ${slotEsc(winner.title)}</div>
+                ${times ? `<div class="text-xs text-overlay0 mt-1.5">${times}</div>` : ''}
+            </div>
+            <div class="flex gap-2 mt-3">
+                <a href="/recipes/${winner.id}" class="btn btn-primary flex-1">👨‍🍳 Let's cook it</a>
+                <button type="button" class="btn btn-ghost" onclick="startSlot()">🎰 Again</button>
+                <button type="button" class="btn btn-ghost" onclick="slotBackToCats()" title="Change categories">🏷️</button>
+            </div>`;
+    }, reduced ? 0 : 280);
+}
+
+function slotBackToCats() {
+    if (slotSpinning) return;
+    document.getElementById('slot-step2').classList.add('hidden');
+    document.getElementById('slot-step1').classList.remove('hidden');
+}
+
+function slotConfetti(accent) {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const canvas = document.getElementById('slot-confetti');
+    if (!canvas) return;
+    const panel = canvas.closest('.slot-panel');
+    canvas.width = panel.clientWidth;
+    canvas.height = panel.clientHeight;
+    const ctx = canvas.getContext('2d');
+    const colors = [accent, '#60a5fa', '#fbbf24', '#4ade80', '#f9a8d4', '#a78bfa'];
+    const parts = Array.from({ length: 70 }, () => ({
+        x: canvas.width / 2 + (Math.random() - 0.5) * canvas.width * 0.6,
+        y: canvas.height * 0.4,
+        vx: (Math.random() - 0.5) * 7,
+        vy: -Math.random() * 7 - 3,
+        w: 4 + Math.random() * 5,
+        h: 7 + Math.random() * 6,
+        rot: Math.random() * Math.PI,
+        vr: (Math.random() - 0.5) * 0.3,
+        color: colors[Math.floor(Math.random() * colors.length)],
+    }));
+    const t0 = performance.now();
+    function tick(now) {
+        const t = (now - t0) / 1500;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (t >= 1) return;
+        ctx.globalAlpha = 1 - t;
+        for (const p of parts) {
+            p.x += p.vx; p.y += p.vy; p.vy += 0.25; p.rot += p.vr;
+            ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+            ctx.fillStyle = p.color;
+            ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+            ctx.restore();
+        }
+        requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
 }
 </script>
 {% endblock %}
