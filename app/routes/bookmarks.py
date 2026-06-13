@@ -73,6 +73,19 @@ async def create_bookmark_group(request: Request, db: AsyncSession = Depends(get
     return _redirect(request, "/bookmarks#bookmarks-settings")
 
 
+# Declared before /{group_id} so "reorder" isn't captured as a group id.
+@router.post("/api/bookmark-groups/reorder")
+async def reorder_bookmark_groups(request: Request, db: AsyncSession = Depends(get_db)):
+    """Persist category (section) order. Body: {"groups": [id, id, ...]}."""
+    body = await request.json()
+    for idx, gid in enumerate(body.get("groups", [])):
+        grp = await db.get(BookmarkGroup, gid)
+        if grp:
+            grp.sort_order = idx
+    await db.commit()
+    return {"ok": True}
+
+
 @router.post("/api/bookmark-groups/{group_id}")
 async def bookmark_group_dispatch(group_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     form = await request.form()
