@@ -35,6 +35,7 @@ async def init_db():
 # column is missing, so this is idempotent.
 _COLUMN_MIGRATIONS = [
     ("note_groups", "pin_hash", "VARCHAR(160)"),
+    ("bookmark_groups", "columns", "INTEGER DEFAULT 0"),
 ]
 
 

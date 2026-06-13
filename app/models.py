@@ -389,6 +389,7 @@ class BookmarkGroup(Base):
     name = Column(String(100), nullable=False)
     color = Column(String(7), default="#60a5fa")   # hex accent for the section/tiles
     icon = Column(String(10), default="🔖")
+    columns = Column(Integer, default=0)           # 0 = auto-fill; else fixed tiles/row on desktop
     sort_order = Column(Integer, default=0)
     created_at = Column(String(19), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
 
