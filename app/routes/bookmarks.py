@@ -25,6 +25,15 @@ def _redirect(request: Request, url: str):
     return RedirectResponse(url=url, status_code=303)
 
 
+def _parse_columns(value) -> int:
+    """Tiles-per-row for a category: 0 (auto) or a small fixed count."""
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return n if 0 <= n <= 12 else 0
+
+
 # ── Page ──────────────────────────────────────────────────
 
 @router.get("/bookmarks", response_class=HTMLResponse)
@@ -56,6 +65,7 @@ async def create_bookmark_group(request: Request, db: AsyncSession = Depends(get
     db.add(BookmarkGroup(name=name,
                          color=str(form.get("color") or "#60a5fa"),
                          icon=str(form.get("icon") or "🔖"),
+                         columns=_parse_columns(form.get("columns")),
                          sort_order=next_order))
     await db.commit()
     return _redirect(request, "/bookmarks#bookmarks-settings")
@@ -82,6 +92,8 @@ async def bookmark_group_dispatch(group_id: int, request: Request, db: AsyncSess
             group.color = str(form.get("color"))
         if form.get("icon"):
             group.icon = str(form.get("icon"))
+        if form.get("columns") is not None:
+            group.columns = _parse_columns(form.get("columns"))
         await db.commit()
         return _redirect(request, "/bookmarks#bookmarks-settings")
 
@@ -117,6 +129,26 @@ async def create_bookmark(request: Request, db: AsyncSession = Depends(get_db)):
     db.add(Bookmark(**data, sort_order=next_order))
     await db.commit()
     return _redirect(request, "/bookmarks")
+
+
+# Declared before /{bookmark_id} so "reorder" isn't captured as a bookmark id.
+@router.post("/api/bookmarks/reorder")
+async def reorder_bookmarks(request: Request, db: AsyncSession = Depends(get_db)):
+    """Persist the full layout. Body: {"groups": [{"group_id", "bookmarks": [id,...]}]}.
+    Handles both within-category reordering and moves between categories."""
+    body = await request.json()
+    valid_groups = {g for (g,) in (await db.execute(select(BookmarkGroup.id))).all()}
+    for grp in body.get("groups", []):
+        gid = grp.get("group_id")
+        if gid not in valid_groups:
+            continue
+        for idx, bid in enumerate(grp.get("bookmarks", [])):
+            bm = await db.get(Bookmark, bid)
+            if bm:
+                bm.group_id = gid
+                bm.sort_order = idx
+    await db.commit()
+    return {"ok": True}
 
 
 @router.post("/api/bookmarks/{bookmark_id}")
