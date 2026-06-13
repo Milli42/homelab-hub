@@ -34,9 +34,11 @@
 {% endif %}
 
 {% if groups %}
+<div id="bm-sections">
 {% for g in groups %}
 <section class="bm-section animate-in" data-group-id="{{ g.id }}" style="--c: {{ g.color }}; --i:{{ loop.index0 + 1 }}">
     <div class="bm-sec-head">
+        <span class="bm-sec-grip" title="Drag to reorder category" aria-hidden="true">⠿</span>
         <button type="button" class="bm-sec-toggle" onclick="toggleCollapse({{ g.id }})" aria-expanded="true">
             <span class="bm-chev">▶</span>
             <span class="bm-sec-icon">{{ g.icon }}</span>
@@ -77,6 +79,7 @@
     {% endif %}
 </section>
 {% endfor %}
+</div>
 {% else %}
 <div class="text-center py-16 animate-in">
     <div class="text-6xl mb-5 opacity-25">🔖</div>
@@ -91,7 +94,8 @@
     <summary class="section-title !mb-0 py-2"><span class="chev">▶</span> ⚙️ Bookmark Settings</summary>
     <div class="settings-body mt-3 max-w-lg">
     <div class="card p-6">
-        <h2 class="text-lg font-bold mb-4">🏷️ Categories</h2>
+        <h2 class="text-lg font-bold mb-1">🏷️ Categories</h2>
+        <p class="text-sm text-overlay0 mb-4">Add new categories with <b>+ Category</b> in edit mode. Reorder them by dragging the <b>⠿</b> handle while editing.</p>
         <div class="space-y-2 mb-8">
             {% for g in groups %}
             <div class="flex items-center gap-3 p-3 rounded-xl border border-[#232838] bg-[#10131a]" style="border-left: 3px solid {{ g.color }}">
@@ -112,31 +116,15 @@
             {% endfor %}
         </div>
 
-        <form action="/api/bookmark-groups" method="POST" class="space-y-4 pt-4 border-t border-white/5">
-            <h2 class="text-lg font-bold">Add Category</h2>
-            <div>
-                <label class="field-label">Name</label>
-                <input type="text" name="name" class="input" placeholder="e.g. Media" required>
+        <div class="pt-5 border-t border-white/5">
+            <h2 class="text-lg font-bold mb-1">📐 Tile size</h2>
+            <p class="text-sm text-overlay0 mb-3">How tall the bookmark tiles are. Smaller fits more on a page. Saved on this device.</p>
+            <div class="bm-density-seg" role="group" aria-label="Tile size">
+                <button type="button" data-density="compact" onclick="setBmDensity('compact')">Compact</button>
+                <button type="button" data-density="cozy" onclick="setBmDensity('cozy')">Cozy</button>
+                <button type="button" data-density="comfortable" onclick="setBmDensity('comfortable')">Comfortable</button>
             </div>
-            <div>
-                <label class="field-label">Icon</label>
-                <div class="flex items-center gap-2">
-                    <span id="sc-icon-preview" class="text-2xl w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 border border-[#232838] bg-[#10131a]">🔖</span>
-                    <input type="text" name="icon" class="input flex-1" value="🔖" maxlength="10" id="sc-icon-input" onfocus="this.select()" oninput="document.getElementById('sc-icon-preview').textContent=this.value">
-                </div>
-                <div class="emoji-grid mt-2" data-emoji-picker data-target="sc-icon-input" data-preview="sc-icon-preview"></div>
-            </div>
-            <div>
-                <label class="field-label">Color</label>
-                <div class="flex gap-2">
-                    <input type="color" value="#60a5fa" class="w-12 h-11 rounded-lg cursor-pointer border-0 p-0 bg-transparent"
-                           oninput="this.nextElementSibling.value=this.value">
-                    <input type="text" name="color" value="#60a5fa" class="input flex-1 font-mono text-sm"
-                           pattern="^#[0-9a-fA-F]{6}$" oninput="this.previousElementSibling.value=this.value">
-                </div>
-            </div>
-            <button type="submit" class="btn btn-primary">Add Category</button>
-        </form>
+        </div>
     </div>
     </div>
 </details>
@@ -176,6 +164,12 @@
 </div>
 
 <style>
+    /* ── Tile density (size) — chosen in settings, saved per-device.
+       Defaults to "cozy"; "compact"/"comfortable" override the knobs. ── */
+    :root { --bm-pad-y: 0.5rem;  --bm-pad-x: 0.7rem; --bm-tile-gap: 0.6rem; --bm-icon: 2.05rem; --bm-grid-gap: 0.55rem; }
+    body[data-bm-density="compact"]     { --bm-pad-y: 0.32rem; --bm-pad-x: 0.55rem; --bm-tile-gap: 0.5rem; --bm-icon: 1.75rem; --bm-grid-gap: 0.45rem; }
+    body[data-bm-density="comfortable"] { --bm-pad-y: 0.7rem;  --bm-pad-x: 0.8rem;  --bm-tile-gap: 0.7rem; --bm-icon: 2.5rem;  --bm-grid-gap: 0.65rem; }
+
     /* ── Sections ── */
     .bm-section { margin-bottom: 1.75rem; }
     .bm-sec-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.85rem; }
@@ -196,20 +190,26 @@
     }
     .bm-sec-name { font-size: 1.05rem; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .bm-section.collapsed .bm-grid, .bm-section.collapsed .bm-empty { display: none; }
+    /* Category drag handle — only grabbable in edit mode. */
+    .bm-sec-grip {
+        display: none; align-items: center; flex-shrink: 0; cursor: grab;
+        color: #76819a; font-size: 1.05rem; line-height: 1; padding: 0 0.1rem; user-select: none;
+    }
+    .bm-sec-grip:active { cursor: grabbing; }
 
     /* ── Tile grid ──
        Mobile: simple auto-fill so tiles never get too small.
        ≥768px: a 12-track grid where each tile spans --span twelfths
        (2=⅙, 3=¼, 4=⅓, 6=½, 8=⅔, 12=full). Default flow (not dense) so
        drag-arranged order is preserved. */
-    .bm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.6rem; }
+    .bm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--bm-grid-gap); }
     @media (min-width: 768px) {
         .bm-grid { grid-template-columns: repeat(12, 1fr); }
         .bm-tile { grid-column: span var(--span, 4); }
     }
     .bm-tile {
-        position: relative; display: flex; align-items: center; gap: 0.7rem;
-        padding: 0.7rem 0.8rem; border-radius: 0.8rem; overflow: hidden;
+        position: relative; display: flex; align-items: center; gap: var(--bm-tile-gap);
+        padding: var(--bm-pad-y) var(--bm-pad-x); border-radius: 0.8rem; overflow: hidden;
         background: var(--c-card); border: 1px solid var(--c-border);
         transition: transform 0.25s var(--spring), border-color 0.2s, background 0.2s;
     }
@@ -220,8 +220,8 @@
     }
     .bm-hit { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
     .bm-icon {
-        width: 2.5rem; height: 2.5rem; flex-shrink: 0; border-radius: 0.6rem;
-        display: flex; align-items: center; justify-content: center; font-size: 1.35rem;
+        width: var(--bm-icon); height: var(--bm-icon); flex-shrink: 0; border-radius: 0.6rem;
+        display: flex; align-items: center; justify-content: center; font-size: calc(var(--bm-icon) * 0.54);
         overflow: hidden; line-height: 1;
         background: color-mix(in srgb, var(--c) 16%, transparent);
         border: 1px solid color-mix(in srgb, var(--c) 28%, transparent);
@@ -271,6 +271,7 @@
     body.bm-editing .bm-edit-hint { display: block; animation: rise-in 0.3s var(--ease-out); }
     body.bm-editing .bm-edit-toolbar { display: flex; animation: rise-in 0.3s var(--ease-out); }
     body.bm-editing .bm-sec-add { display: inline-flex; }
+    body.bm-editing .bm-sec-grip { display: inline-flex; }
     body.bm-editing .bm-hit { pointer-events: none; }
     body.bm-editing .bm-tile { cursor: grab; }
     body.bm-editing .bm-tile:active { cursor: grabbing; }
@@ -287,6 +288,17 @@
     .fab-add.fab-icon { font-size: 1.4rem; line-height: 1; }
     .fab-add.fab-icon::before, .fab-add.fab-icon::after { display: none; }
     body.bm-editing .fab-add.fab-icon { background: var(--c-green, #4ade80); }
+
+    /* ── Tile-size segmented control (settings) ── */
+    .bm-density-seg { display: inline-flex; border: 1px solid var(--c-border); border-radius: 0.6rem; overflow: hidden; }
+    .bm-density-seg button {
+        padding: 0.45rem 0.95rem; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+        background: #10131a; color: #aab3c8; border: none; border-left: 1px solid var(--c-border);
+        transition: background 0.15s, color 0.15s;
+    }
+    .bm-density-seg button:first-child { border-left: none; }
+    .bm-density-seg button:hover { background: #1a1f2c; color: #e8ebf4; }
+    .bm-density-seg button.active { background: #60a5fa; color: #07090d; }
 
     /* ── Emoji picker (shared look with Notes) ── */
     .emoji-grid {
@@ -368,8 +380,32 @@
         localStorage.setItem('bm-collapsed', JSON.stringify(saved));
     }
 
+    // ── Tile size (density) — persisted per-device in localStorage ──
+    function readBmDensity() { return localStorage.getItem('bm-density') || 'cozy'; }
+    function applyBmDensity() {
+        const d = readBmDensity();
+        document.body.dataset.bmDensity = d;
+        document.querySelectorAll('.bm-density-seg button').forEach(b =>
+            b.classList.toggle('active', b.dataset.density === d));
+    }
+    function setBmDensity(d) {
+        localStorage.setItem('bm-density', d);
+        applyBmDensity();
+    }
+
     // ── Arrange mode (drag to reorder / move between categories) ──
     let bmSortables = [];
+    let bmSectionSortable = null;
+    function persistGroupOrder() {
+        const order = [...document.querySelectorAll('#bm-sections > .bm-section')]
+            .map(s => Number(s.dataset.groupId));
+        fetch('/api/bookmark-groups/reorder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ groups: order }),
+        }).then(r => { if (!r.ok) showToast('Could not save category order'); })
+          .catch(() => showToast('Could not save category order'));
+    }
     function persistLayout() {
         const groups = [...document.querySelectorAll('.bm-grid')].map(grid => ({
             group_id: Number(grid.dataset.groupId),
@@ -411,10 +447,24 @@
                     onEnd: persistLayout,
                 }));
             });
+            // Whole categories drag by their ⠿ handle to reorder the sections.
+            const wrap = document.getElementById('bm-sections');
+            if (wrap) {
+                bmSectionSortable = new Sortable(wrap, {
+                    draggable: '.bm-section',
+                    handle: '.bm-sec-grip',
+                    animation: 160,
+                    ghostClass: 'bm-ghost',
+                    dragClass: 'bm-drag',
+                    onEnd: persistGroupOrder,
+                });
+            }
             showToast('Edit mode — add, rearrange, or remove');
         } else {
             bmSortables.forEach(s => s.destroy());
             bmSortables = [];
+            bmSectionSortable?.destroy();
+            bmSectionSortable = null;
             applyCollapsed();  // restore saved collapsed state
         }
     }
@@ -563,7 +613,8 @@
         buildEmojiPicker(overlay.querySelector('[data-emoji-picker]'));
     }
 
-    // Apply saved collapse state on load (runs synchronously to avoid a flash).
+    // Apply saved collapse state + tile size on load (synchronously to avoid a flash).
     applyCollapsed();
+    applyBmDensity();
 </script>
 {% endblock %}
