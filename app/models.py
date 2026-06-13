@@ -375,3 +375,53 @@ class RecipeImage(Base):
     __table_args__ = (
         Index("idx_recipe_images_recipe", "recipe_id"),
     )
+
+
+# ════════════════════════════════════════════════════════════
+# Bookmarks module
+# ════════════════════════════════════════════════════════════
+
+class BookmarkGroup(Base):
+    """A category of bookmarks (e.g. Media, Network), rendered as a section."""
+    __tablename__ = "bookmark_groups"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    color = Column(String(7), default="#60a5fa")   # hex accent for the section/tiles
+    icon = Column(String(10), default="🔖")
+    sort_order = Column(Integer, default=0)
+    created_at = Column(String(19), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+
+    bookmarks = relationship("Bookmark", back_populates="group", cascade="all, delete-orphan",
+                             order_by="Bookmark.sort_order, Bookmark.id")
+
+
+class Bookmark(Base):
+    __tablename__ = "bookmarks"
+
+    id = Column(Integer, primary_key=True)
+    group_id = Column(Integer, ForeignKey("bookmark_groups.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String(150), nullable=False)
+    url = Column(String(2048), nullable=False)
+    subtitle = Column(String(255), nullable=True)   # optional one-liner under the title
+    # Smart icon: an emoji, or an image URL (http(s):// or root-relative /path).
+    # Empty → a lettered badge is rendered from the title.
+    icon = Column(String(512), default="")
+    sort_order = Column(Integer, default=0)
+    created_at = Column(String(19), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+
+    group = relationship("BookmarkGroup", back_populates="bookmarks")
+
+    __table_args__ = (
+        Index("idx_bookmarks_group", "group_id"),
+    )
+
+    @property
+    def icon_is_image(self) -> bool:
+        """True when `icon` should render as an <img> rather than emoji/text."""
+        return (self.icon or "").strip().startswith(("http://", "https://", "/"))
+
+    @property
+    def letter(self) -> str:
+        """First letter of the title — fallback badge when no icon is set."""
+        return ((self.title or "?").strip()[:1] or "?").upper()

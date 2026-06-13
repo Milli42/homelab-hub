@@ -181,6 +181,7 @@ from app.routes.categories import router as categories_router
 from app.routes.notes import router as notes_router
 from app.routes.vax import router as vax_router
 from app.routes.recipes import router as recipes_router
+from app.routes.bookmarks import router as bookmarks_router
 from app.routes.pages import router as pages_router
 
 app.include_router(tasks_router)
@@ -190,4 +191,5 @@ app.include_router(categories_router)
 app.include_router(notes_router)
 app.include_router(vax_router)
 app.include_router(recipes_router)
+app.include_router(bookmarks_router)
 app.include_router(pages_router)
