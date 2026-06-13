@@ -242,6 +242,11 @@
        The icon + title stay on the first flex line; the stats wrap to a full-width
        second line below them. */
     .bm-tile.has-widget { flex-wrap: wrap; align-content: center; }
+    /* On phones the auto-fill grid would squeeze two widget tiles side by side and
+       crush their stat strip — give every widget tile the full row instead. */
+    @media (max-width: 767.98px) {
+        .bm-tile.has-widget { grid-column: 1 / -1; }
+    }
     .bm-stats {
         order: 3; flex-basis: 100%; width: 100%;
         display: flex; gap: 0.35rem; margin-top: 0.5rem;
@@ -367,6 +372,10 @@
     .bm-ent-row .input { padding: 0.4rem 0.5rem; font-size: 0.8rem; }
     .bm-check { display: flex; align-items: center; gap: 0.55rem; font-size: 0.82rem; color: #aab3c8; cursor: pointer; }
     .bm-check input { width: 1rem; height: 1rem; flex-shrink: 0; }
+    /* Stat picker — wrap of small checkbox chips for choosing which API stats show. */
+    .bm-stat-picks { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin-top: 0.15rem; }
+    .bm-stat-pick { display: flex; align-items: center; gap: 0.45rem; font-size: 0.82rem; color: #aab3c8; cursor: pointer; }
+    .bm-stat-pick input { width: 1rem; height: 1rem; flex-shrink: 0; }
 </style>
 
 <script src="/static/js/sortable.min.js"></script>
@@ -663,6 +672,22 @@
                 </div>`;
             }
         });
+        // Stat picker — choose which API stats appear on the tile. Pre-checks the
+        // saved selection, or each stat's default when none has been saved yet.
+        if (provider.stats && provider.stats.length) {
+            const saved = Array.isArray(cfg.stats) ? cfg.stats : null;
+            const boxes = provider.stats.map(s => {
+                const on = saved ? saved.includes(s.key) : (s.default !== false);
+                return `<label class="bm-stat-pick">
+                    <input type="checkbox" name="w_stats" value="${bmEsc(s.key)}"${on ? ' checked' : ''}>
+                    <span>${bmEsc(s.label)}</span>
+                </label>`;
+            }).join('');
+            html += `<div class="mt-3">
+                <label class="field-label">Stats to show</label>
+                <div class="bm-stat-picks">${boxes}</div>
+            </div>`;
+        }
         html += `<label class="bm-check mt-3">
             <input type="checkbox" name="w_ignore_tls"${cfg.verify_tls === false ? ' checked' : ''}>
             <span>Ignore certificate errors (self-signed / internal HTTPS)</span>
